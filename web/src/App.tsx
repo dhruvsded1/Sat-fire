@@ -1,0 +1,275 @@
+import React, { useState, useEffect } from 'react';
+import { Header } from './components/Header';
+import { MapViewer } from './components/MapViewer';
+import { TimelinePlayer } from './components/TimelinePlayer';
+import { LayerControls } from './components/LayerControls';
+import { InspectorCard } from './components/InspectorCard';
+import { MetricsPanel } from './components/MetricsPanel';
+import { ModelBenchmarks } from './components/ModelBenchmarks';
+import { FeatureImportance } from './components/FeatureImportance';
+import { MethodologyModal } from './components/MethodologyModal';
+
+import {
+  Manifest,
+  ManifestFire,
+  FireMeta,
+  DayMetric,
+  FireMetricsSummary,
+  ModelsContract,
+  ImportanceData,
+  LayerState,
+  InspectorSample
+} from './types/contract';
+import {
+  fetchManifest,
+  fetchFireMeta,
+  fetchFireMetrics,
+  fetchModels,
+  fetchImportance
+} from './services/dataService';
+import { Flame, MapPin, Maximize2, Calendar, Radio } from 'lucide-react';
+
+export const App: React.FC = () => {
+  const [manifest, setManifest] = useState<Manifest | null>(null);
+  const [selectedFire, setSelectedFire] = useState<ManifestFire | null>(null);
+  const [fireMeta, setFireMeta] = useState<FireMeta | null>(null);
+  const [fireMetrics, setFireMetrics] = useState<{
+    days: DayMetric[];
+    summary: FireMetricsSummary;
+  } | null>(null);
+  const [modelsData, setModelsData] = useState<ModelsContract | null>(null);
+  const [importanceData, setImportanceData] = useState<ImportanceData | null>(null);
+
+  const [currentDate, setCurrentDate] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<'explorer' | 'benchmarks' | 'importance'>('explorer');
+  const [isMethodologyOpen, setIsMethodologyOpen] = useState<boolean>(false);
+  const [inspectedSample, setInspectedSample] = useState<InspectorSample | null>(null);
+
+  const [layerState, setLayerState] = useState<LayerState>({
+    showComposite: true,
+    compositeOpacity: 0.95,
+    showThermal: false,
+    thermalOpacity: 0.8,
+    activeFireMode: 'confusion', // Default to confusion matrix to highlight algorithm evaluation
+    burnedAreaMode: 'none',
+    showNextDay: true, // Default to next-day prediction
+    nextDayThreshold: 0.35,
+    showActualNextOverlay: false,
+    swipeCompare: false,
+    swipePosition: 50
+  });
+
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // 1. Load initial manifest & models
+  useEffect(() => {
+    async function init() {
+      try {
+        const [m, models, imp] = await Promise.all([
+          fetchManifest(),
+          fetchModels(),
+          fetchImportance()
+        ]);
+        setManifest(m);
+        setModelsData(models);
+        setImportanceData(imp);
+
+        if (m.fires.length > 0) {
+          // Select Walkers Fire (US_2021_CA3627811855020210815) or Bush Fire if present, else first
+          const prominentFire =
+            m.fires.find(
+              (f) =>
+                f.id === 'US_2021_CA3627811855020210815' ||
+                f.id === '24103571' ||
+                f.area_km2 > 100
+            ) || m.fires[0];
+          setSelectedFire(prominentFire);
+        }
+      } catch (err) {
+        console.error('Failed to initialize FireLens data:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    init();
+  }, []);
+
+  // 2. Load fire metadata and metrics when selected fire changes
+  useEffect(() => {
+    if (!selectedFire) return;
+
+    async function loadFireData() {
+      try {
+        const [meta, metrics] = await Promise.all([
+          fetchFireMeta(selectedFire!.id),
+          fetchFireMetrics(selectedFire!.id)
+        ]);
+        setFireMeta(meta);
+        setFireMetrics(metrics);
+
+        if (meta.days.length > 0) {
+          // Select a day with active fire detections if possible
+          const activeDay = metrics.days.find((d) => d.f1_af > 0.4 || d.new_km2 > 0.5);
+          if (activeDay) {
+            setCurrentDate(activeDay.date);
+          } else {
+            const mid = Math.floor(meta.days.length / 2);
+            setCurrentDate(meta.days[mid]);
+          }
+        }
+        setInspectedSample(null);
+      } catch (err) {
+        console.error(`Error loading fire data for ${selectedFire!.id}:`, err);
+      }
+    }
+    loadFireData();
+  }, [selectedFire]);
+
+  const handleUpdateLayerState = (newState: Partial<LayerState>) => {
+    setLayerState((prev) => ({ ...prev, ...newState }));
+  };
+
+  if (isLoading || !manifest || !selectedFire || !fireMeta || !fireMetrics) {
+    return (
+      <div className="w-screen h-screen flex flex-col items-center justify-center bg-slate-950 text-slate-300 font-mono space-y-3">
+        <div className="w-12 h-12 rounded-xl bg-orange-600 flex items-center justify-center shadow-lg shadow-orange-500/30 animate-pulse">
+          <Flame className="w-7 h-7 text-white" />
+        </div>
+        <div className="text-sm font-semibold tracking-wider text-orange-400">
+          INITIALIZING FIRELENS TELEMETRY...
+        </div>
+        <div className="text-xs text-slate-500">Loading TS-SatFire Multi-Spectral Wildfire Rasters</div>
+      </div>
+    );
+  }
+
+  const currentDayMetric =
+    fireMetrics.days.find((d) => d.date === currentDate) || fireMetrics.days[0];
+  const finalBurnedKm2 =
+    selectedFire.area_km2 > 0
+      ? selectedFire.area_km2
+      : fireMetrics.summary.total_burned_km2;
+
+  return (
+    <div className="w-screen h-screen flex flex-col bg-slate-950 text-slate-100 overflow-hidden font-sans">
+      {/* Top Application Header */}
+      <Header
+        fires={manifest.fires}
+        selectedFire={selectedFire}
+        onSelectFire={(f) => setSelectedFire(f)}
+        activeTab={activeTab}
+        onChangeTab={(t) => setActiveTab(t)}
+        onOpenMethodology={() => setIsMethodologyOpen(true)}
+      />
+
+      {/* Main Body View */}
+      <div className="flex-1 relative overflow-hidden">
+        {activeTab === 'explorer' && (
+          <div className="w-full h-full flex flex-col lg:flex-row relative">
+            {/* Left Controls & Scenario Details Panel */}
+            <div className="w-full lg:w-80 lg:min-w-[320px] p-3 border-r border-slate-800 bg-slate-950/95 overflow-y-auto space-y-3 z-20 max-h-56 lg:max-h-full">
+              {/* Scenario Summary Card */}
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 space-y-2 select-none shadow-lg">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-mono uppercase text-orange-400 font-semibold flex items-center space-x-1">
+                    <MapPin className="w-3 h-3 text-orange-400" />
+                    <span>State: {selectedFire.state}</span>
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-400">
+                    {fireMeta.days.length} Days
+                  </span>
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-bold text-white font-mono">{selectedFire.name}</h3>
+                  <div className="flex items-center space-x-1 text-[11px] text-slate-400 mt-0.5">
+                    <Calendar className="w-3 h-3 text-slate-500" />
+                    <span>{selectedFire.start} &rarr; {selectedFire.end}</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800/80 text-[10px] font-mono">
+                  <div>
+                    <span className="text-slate-500 block">TOTAL SCAR</span>
+                    <span className="text-orange-400 font-bold">{finalBurnedKm2} km²</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block">RESOLUTION</span>
+                    <span className="text-slate-300 font-bold">
+                      {fireMeta.pixel_size_m}m <span className="text-slate-500">({fireMeta.png_size.join('×')})</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Layer Toggles & Threshold Controls */}
+              <LayerControls
+                layerState={layerState}
+                onChangeLayerState={handleUpdateLayerState}
+              />
+            </div>
+
+            {/* Center: MapLibre Geospatial Canvas & Floating Timeline */}
+            <div className="flex-1 relative h-full">
+              <MapViewer
+                fireId={selectedFire.id}
+                bounds={fireMeta.bounds}
+                currentDate={currentDate}
+                currentMetric={currentDayMetric}
+                layerState={layerState}
+                onChangeLayerState={handleUpdateLayerState}
+                onSamplePixel={(s) => setInspectedSample(s)}
+              />
+
+              {/* Floating Bottom Timeline Scrubber */}
+              <div className="absolute bottom-4 left-4 right-4 max-w-2xl mx-auto z-20">
+                <TimelinePlayer
+                  days={fireMeta.days}
+                  metrics={fireMetrics.days}
+                  currentDate={currentDate}
+                  onSelectDate={(d) => setCurrentDate(d)}
+                />
+              </div>
+            </div>
+
+            {/* Right Telemetry & Inspector Panel */}
+            <div className="w-full lg:w-88 lg:min-w-[340px] p-3 border-l border-slate-800 bg-slate-950/95 overflow-y-auto space-y-3 z-20 max-h-72 lg:max-h-full">
+              {/* Click / Hover Pixel Inspector */}
+              <InspectorCard
+                sample={inspectedSample}
+                onClear={() => setInspectedSample(null)}
+              />
+
+              {/* Daily Metrics & Recharts Progression */}
+              <MetricsPanel
+                currentMetric={currentDayMetric}
+                metrics={fireMetrics.days}
+                summary={fireMetrics.summary}
+                currentDate={currentDate}
+                onSelectDate={(d) => setCurrentDate(d)}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Algorithm Benchmarks Tab */}
+        {activeTab === 'benchmarks' && (
+          <ModelBenchmarks modelsData={modelsData} />
+        )}
+
+        {/* Channel Feature Importance Tab */}
+        {activeTab === 'importance' && (
+          <FeatureImportance importanceData={importanceData} />
+        )}
+      </div>
+
+      {/* Methodology & Guide Modal */}
+      <MethodologyModal
+        isOpen={isMethodologyOpen}
+        onClose={() => setIsMethodologyOpen(false)}
+      />
+    </div>
+  );
+};
+
+export default App;

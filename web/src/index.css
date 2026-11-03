@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-950 text-slate-100 font-sans;
+  }
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0b1320;
+}
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+/* MapLibre Container Override */
+.maplibregl-map {
+  font-family: inherit;
+}
+.maplibregl-ctrl-attrib {
+  display: none !important;
+}
+
+/* Neon glow effects for fire visualization */
+.glow-fire {
+  box-shadow: 0 0 15px rgba(249, 115, 22, 0.4);
+}
+.glow-cyan {
+  box-shadow: 0 0 15px rgba(6, 182, 212, 0.4);
+}
