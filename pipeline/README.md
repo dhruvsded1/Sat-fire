@@ -75,3 +75,4 @@ This single command executes:
 - Our compact U-Net achieves competitive F1 (**0.801** vs Paper's **0.810** on Active Fire) while training in minutes on a single laptop GPU (RTX 4050).
 - Threshold baselines establish the physical lower bound and demonstrate the clear necessity of learned spatial-spectral features.
 - All exported data has been validated against `/contract/schema.json` with zero errors.
+

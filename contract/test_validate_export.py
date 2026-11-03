@@ -60,3 +60,4 @@ def test_validator_detects_missing_day_png(sample_dataset):
     success = validator.run()
     assert success is False
     assert any("Missing required image af_gt.png" in e for e in validator.errors)
+

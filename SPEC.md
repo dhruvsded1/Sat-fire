@@ -163,3 +163,4 @@ Per-day evaluation and area metrics:
 
 ### 4.3 Prediction Map (`pred_next.png`)
 - Grayscale (8-bit, 0-255) or Cyan RGBA gradient representing predicted probability $\in [0, 1]$ scaled to $0-255$.
+
