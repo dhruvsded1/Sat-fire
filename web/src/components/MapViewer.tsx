@@ -1,13 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import {
-  Compass,
+  Satellite,
   Thermometer,
-  Wind,
-  SplitSquareVertical,
   RefreshCw,
-  ZoomIn,
-  ZoomOut,
   BarChart3
 } from 'lucide-react';
 import { Bounds, LayerState, DayMetric, InspectorSample } from '../types/contract';
@@ -90,11 +86,9 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     [west, south]
   ];
 
-  // 1. Initialize MapLibre
+  // 1. Initialize MapLibre ONCE on mount
   useEffect(() => {
     if (!mapContainerRef.current) return;
-
-    setMapLoaded(false);
 
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
@@ -118,7 +112,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       );
     });
 
-    // Handle container resizing smoothly
+    // Handle container resizing dynamically
     const ro = new ResizeObserver(() => {
       if (mapRef.current) {
         mapRef.current.resize();
@@ -134,7 +128,8 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       if (sample) {
         if (!inspectMarkerRef.current) {
           const el = document.createElement('div');
-          el.className = 'w-4 h-4 rounded-full border-2 border-orange-400 bg-orange-600/60 shadow-lg shadow-orange-500/50 animate-ping';
+          el.className =
+            'w-4 h-4 rounded-full border-2 border-orange-400 bg-orange-600/60 shadow-lg shadow-orange-500/50 animate-ping';
           inspectMarkerRef.current = new maplibregl.Marker({ element: el })
             .setLngLat([sample.lng, sample.lat])
             .addTo(map);
@@ -161,15 +156,34 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       map.remove();
       mapRef.current = null;
     };
-  }, [fireId]);
+  }, []); // Run once on mount
 
-  // 2. Pre-process dynamic canvas rasters (Confusion & Next-Day Probability Filter)
+  // 2. Fly camera to fire bounds whenever fireId or bounds change
+  useEffect(() => {
+    if (!mapLoaded || !mapRef.current) return;
+    const [w, s, e, n] = bounds;
+    mapRef.current.fitBounds(
+      [
+        [w, s],
+        [e, n]
+      ],
+      { padding: 40, duration: 600 }
+    );
+
+    // Reset inspect marker on fire change
+    if (inspectMarkerRef.current) {
+      inspectMarkerRef.current.remove();
+      inspectMarkerRef.current = null;
+    }
+  }, [fireId, bounds, mapLoaded]);
+
+  // 3. Pre-process dynamic canvas rasters (Confusion & Next-Day Probability Filter)
   useEffect(() => {
     pixelSampler.loadDayImages(fireId, currentDate, bounds, [256, 256]);
 
     const urls = getDayRasterUrls(fireId, currentDate);
 
-    // Generate dynamic next-day thresholded mask image
+    // Dynamic next-day thresholded mask image
     const nextImg = new Image();
     nextImg.crossOrigin = 'anonymous';
     nextImg.onload = () => {
@@ -184,16 +198,15 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         const thresh = Math.round(layerState.nextDayThreshold * 255);
 
         for (let i = 0; i < d.length; i += 4) {
-          const prob = d[i]; // 0-255
+          const prob = d[i];
           if (prob >= thresh) {
-            // Radiant Amber-Orange glow for high probability spread
             const norm = (prob - thresh) / (255 - thresh + 1e-4);
-            d[i] = 255; // Red
-            d[i + 1] = Math.round(80 + norm * 140); // Green
-            d[i + 2] = 0; // Blue
-            d[i + 3] = Math.round(140 + norm * 100); // Alpha
+            d[i] = 255;
+            d[i + 1] = Math.round(80 + norm * 140);
+            d[i + 2] = 0;
+            d[i + 3] = Math.round(140 + norm * 100);
           } else {
-            d[i + 3] = 0; // Transparent
+            d[i + 3] = 0;
           }
         }
         ctx.putImageData(imgData, 0, 0);
@@ -202,7 +215,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     };
     nextImg.src = urls.predNext;
 
-    // Generate dynamic confusion matrix mask
+    // Dynamic confusion matrix mask
     const afPredImg = new Image();
     const afGtImg = new Image();
     let loadedCount = 0;
@@ -268,7 +281,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     afGtImg.src = urls.afGt;
   }, [fireId, currentDate, layerState.nextDayThreshold, bounds]);
 
-  // 3. Update MapLibre Image Layers
+  // 4. Update MapLibre Image Layers
   useEffect(() => {
     if (!mapLoaded || !mapRef.current) return;
     const map = mapRef.current;
@@ -310,6 +323,9 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       }
     };
 
+    // Calculate effective prediction opacity from Slide to Compare
+    const predOpacity = layerState.predictionOpacity ?? 0.85;
+
     // 1. Composite Base
     updateImageLayer(
       'source-composite',
@@ -337,20 +353,20 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       updateImageLayer('source-ba', 'layer-ba', urls.baGt, false, 0.0);
     }
 
-    // 4. Next-Day Spread Prediction
+    // 4. Next-Day Spread Prediction (governed by Slide to Compare)
     if (layerState.showNextDay && processedNextDayUrl) {
-      updateImageLayer('source-next', 'layer-next', processedNextDayUrl, true, 0.85);
+      updateImageLayer('source-next', 'layer-next', processedNextDayUrl, true, predOpacity);
     } else {
       updateImageLayer('source-next', 'layer-next', urls.predNext, false, 0.0);
     }
 
-    // 5. Active Fire Front (Top Layer)
+    // 5. Active Fire Front (Top Layer - governed by Slide to Compare)
     if (layerState.activeFireMode === 'gt') {
-      updateImageLayer('source-af', 'layer-af', urls.afGt, true, 0.85);
+      updateImageLayer('source-af', 'layer-af', urls.afGt, true, predOpacity);
     } else if (layerState.activeFireMode === 'pred') {
-      updateImageLayer('source-af', 'layer-af', urls.afPred, true, 0.85);
+      updateImageLayer('source-af', 'layer-af', urls.afPred, true, predOpacity);
     } else if (layerState.activeFireMode === 'confusion' && processedConfusionUrl) {
-      updateImageLayer('source-af', 'layer-af', processedConfusionUrl, true, 0.95);
+      updateImageLayer('source-af', 'layer-af', processedConfusionUrl, true, predOpacity);
     } else {
       updateImageLayer('source-af', 'layer-af', urls.afPred, false, 0.0);
     }
@@ -382,42 +398,21 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       {/* MapLibre DOM Container */}
       <div ref={mapContainerRef} className="w-full h-full" />
 
-      {/* Swipe Divider Curtain (if enabled) */}
-      {layerState.swipeCompare && (
-        <div
-          className="absolute inset-y-0 pointer-events-none z-20 flex items-center justify-center"
-          style={{ left: `${layerState.swipePosition}%` }}
-        >
-          <div className="w-0.5 h-full bg-cyan-400 shadow-[0_0_10px_#06b6d4]" />
-          <div className="pointer-events-auto cursor-ew-resize absolute w-8 h-8 rounded-full bg-cyan-500 text-slate-950 font-bold flex items-center justify-center shadow-xl border-2 border-white text-xs">
-            ⇄
-          </div>
-        </div>
-      )}
-
-      {/* Top Left Satellite & Telemetry HUD */}
+      {/* Top Left Satellite Status HUD */}
       {currentMetric && (
-        <div className="absolute top-4 left-4 z-10 flex items-center space-x-2 bg-slate-900/90 backdrop-blur border border-slate-800 rounded-lg px-3 py-2 shadow-xl select-none">
-          {/* Satellite Pass */}
-          <div className="flex items-center space-x-2 border-r border-slate-800 pr-3">
-            <div
-              className="w-6 h-6 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center transition-transform duration-500"
-              style={{ transform: `rotate(${(currentMetric.day_index * 32) % 360}deg)` }}
-              title="VIIRS Satellite Overpass Orientation"
-            >
-              <Compass className="w-4 h-4 text-orange-400" />
-            </div>
+        <div className="absolute top-4 left-4 z-10 flex items-center space-x-3 bg-slate-900/90 backdrop-blur border border-slate-800 rounded-lg px-3 py-1.5 shadow-xl select-none">
+          <div className="flex items-center space-x-1.5 border-r border-slate-800 pr-3">
+            <Satellite className="w-4 h-4 text-orange-400" />
             <div className="text-[11px] font-mono leading-tight">
-              <span className="text-slate-400 block text-[9px]">SENSOR / ORBIT</span>
+              <span className="text-slate-400 block text-[9px]">SENSOR</span>
               <span className="text-white font-semibold">VIIRS 375m</span>
             </div>
           </div>
 
-          {/* 24h Expansion */}
-          <div className="flex items-center space-x-1.5 pl-1">
+          <div className="flex items-center space-x-1.5">
             <Thermometer className="w-4 h-4 text-amber-400" />
             <div className="text-[11px] font-mono leading-tight">
-              <span className="text-slate-400 block text-[9px]">24H NEW BURN</span>
+              <span className="text-slate-400 block text-[9px]">24H EXPANSION</span>
               <span className="text-white font-semibold">+{currentMetric.new_km2} km²</span>
             </div>
           </div>
@@ -425,7 +420,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       )}
 
       {/* Top Right Quick Map Controls */}
-      <div className="absolute top-4 right-4 z-10 flex items-center space-x-1 bg-slate-900/90 backdrop-blur border border-slate-800 rounded-lg p-1 shadow-xl">
+      <div className="absolute top-4 right-4 z-10 flex items-center space-x-1.5 bg-slate-900/90 backdrop-blur border border-slate-800 rounded-lg p-1 shadow-xl">
         <button
           onClick={handleResetBounds}
           className="p-1.5 rounded hover:bg-slate-800 text-slate-300 hover:text-white transition-colors"
@@ -446,7 +441,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
           >
             <BarChart3 className="w-4 h-4" />
             <span className="text-[11px] font-mono hidden sm:inline">
-              {showMetrics ? 'Hide Metrics' : 'Metrics'}
+              {showMetrics ? 'Hide Metrics' : 'Show Metrics'}
             </span>
           </button>
         )}

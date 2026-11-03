@@ -1,5 +1,5 @@
 import React from 'react';
-import { Flame, Satellite, Layers, BarChart3, HelpCircle, ShieldAlert, Cpu } from 'lucide-react';
+import { Flame, Layers, BarChart3, HelpCircle, Cpu, Loader2 } from 'lucide-react';
 import { ManifestFire } from '../types/contract';
 
 interface HeaderProps {
@@ -11,6 +11,7 @@ interface HeaderProps {
   onOpenMethodology: () => void;
   showMetrics?: boolean;
   onToggleMetrics?: () => void;
+  isSwitchingFire?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -21,7 +22,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenMethodology,
   onSelectFire,
   showMetrics = true,
-  onToggleMetrics
+  onToggleMetrics,
+  isSwitchingFire = false
 }) => {
   return (
     <header className="bg-slate-900 border-b border-slate-800 px-4 py-2.5 flex items-center justify-between select-none z-30">
@@ -50,17 +52,19 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="h-6 w-px bg-slate-800 mx-2 hidden md:block" />
 
         <div className="relative">
-          <label className="text-[10px] font-mono uppercase text-slate-400 block mb-0.5">
-            Wildfire Event ({fires.length} Available)
+          <label className="text-[10px] font-mono uppercase text-slate-400 block mb-0.5 flex items-center space-x-1">
+            <span>Wildfire Event ({fires.length} Available)</span>
+            {isSwitchingFire && <Loader2 className="w-3 h-3 text-orange-400 animate-spin" />}
           </label>
           <select
             value={selectedFire?.id || ''}
+            disabled={isSwitchingFire}
             onChange={(e) => {
               const f = fires.find((x) => x.id === e.target.value);
               if (f) onSelectFire(f);
             }}
             aria-label="Wildfire Event"
-            className="bg-slate-800 hover:bg-slate-750 border border-slate-700 text-slate-200 text-xs rounded px-2.5 py-1 pr-7 focus:outline-none focus:border-orange-500 font-medium cursor-pointer transition-colors"
+            className="bg-slate-800 hover:bg-slate-750 disabled:opacity-50 border border-slate-700 text-slate-200 text-xs rounded px-2.5 py-1 pr-7 focus:outline-none focus:border-orange-500 font-medium cursor-pointer transition-colors"
           >
             {fires.map((fire) => (
               <option key={fire.id} value={fire.id}>
@@ -110,7 +114,7 @@ export const Header: React.FC<HeaderProps> = ({
         </button>
       </div>
 
-      {/* Guide, Metrics Toggle & Simulation Disclaimer */}
+      {/* Guide, Metrics Toggle */}
       <div className="flex items-center space-x-2">
         {activeTab === 'explorer' && onToggleMetrics && (
           <button
@@ -134,15 +138,6 @@ export const Header: React.FC<HeaderProps> = ({
         >
           <HelpCircle className="w-3.5 h-3.5 text-orange-400" />
           <span className="hidden lg:inline">Methodology &amp; Guide</span>
-        </button>
-
-        <button
-          onClick={onOpenMethodology}
-          className="flex items-center space-x-1 px-2 py-1 text-[11px] font-mono bg-amber-950/40 text-amber-300 hover:bg-amber-950/70 border border-amber-800/50 rounded transition-colors"
-          title="TS-SatFire Research Dataset Explorer"
-        >
-          <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
-          <span className="hidden xl:inline">TS-SatFire Dataset</span>
         </button>
       </div>
     </header>

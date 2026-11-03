@@ -2,17 +2,13 @@ import React from 'react';
 import {
   Layers,
   Thermometer,
-  Flame,
-  Maximize2,
   TrendingUp,
-  SplitSquareVertical,
-  Eye,
   Sliders,
   CheckCircle2,
-  XCircle,
-  AlertTriangle
+  Eye,
+  Flame
 } from 'lucide-react';
-import { LayerState, ActiveFireMode, BurnedAreaMode } from '../types/contract';
+import { LayerState } from '../types/contract';
 
 interface LayerControlsProps {
   layerState: LayerState;
@@ -25,31 +21,67 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
 }) => {
   return (
     <div className="bg-slate-900/95 backdrop-blur border border-slate-800 rounded-xl p-4 shadow-xl space-y-4 select-none">
-      <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-        <div className="flex items-center space-x-2">
-          <Layers className="w-4 h-4 text-orange-400" />
-          <h2 className="text-xs font-mono font-semibold uppercase text-slate-200">
-            Geospatial Layers & Analysis
-          </h2>
-        </div>
-
-        {/* Swipe Compare Quick Toggle */}
-        <button
-          onClick={() => onChangeLayerState({ swipeCompare: !layerState.swipeCompare })}
-          className={`flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-mono border transition-all ${
-            layerState.swipeCompare
-              ? 'bg-cyan-950/80 text-cyan-300 border-cyan-700/80'
-              : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
-          }`}
-          title="Curtain slider to compare raw imagery with predictions"
-        >
-          <SplitSquareVertical className="w-3 h-3" />
-          <span>Swipe Compare</span>
-        </button>
+      {/* Title */}
+      <div className="flex items-center space-x-2 pb-2 border-b border-slate-800">
+        <Layers className="w-4 h-4 text-orange-400" />
+        <h2 className="text-xs font-mono font-semibold uppercase text-slate-200">
+          Geospatial Layers &amp; Controls
+        </h2>
       </div>
 
-      {/* 1. Base Satellite Rasters */}
-      <div className="space-y-2.5">
+      {/* 1. Slide to Compare: Raw Satellite vs AI Prediction */}
+      <div className="bg-slate-950/80 p-3 rounded-lg border border-slate-800 space-y-2.5">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] font-mono uppercase text-orange-400 font-semibold flex items-center space-x-1.5">
+            <Sliders className="w-3.5 h-3.5 text-orange-400" />
+            <span>Slide to Compare</span>
+          </span>
+          <span className="text-[10px] font-mono text-slate-300">
+            {Math.round((layerState.predictionOpacity ?? 0.85) * 100)}% AI Overlay
+          </span>
+        </div>
+
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.05}
+          value={layerState.predictionOpacity ?? 0.85}
+          onChange={(e) => onChangeLayerState({ predictionOpacity: parseFloat(e.target.value) })}
+          className="w-full h-1.5 bg-slate-800 rounded appearance-none cursor-pointer accent-orange-500"
+          title="Slide to compare raw satellite imagery (0%) with AI predictions (100%)"
+        />
+
+        <div className="flex justify-between text-[9px] font-mono text-slate-400 pt-0.5">
+          <button
+            onClick={() => onChangeLayerState({ predictionOpacity: 0 })}
+            className={`px-1.5 py-0.5 rounded hover:bg-slate-800 transition-colors ${
+              (layerState.predictionOpacity ?? 0.85) === 0 ? 'text-orange-400 font-bold bg-slate-800' : ''
+            }`}
+          >
+            Raw Satellite
+          </button>
+          <button
+            onClick={() => onChangeLayerState({ predictionOpacity: 0.85 })}
+            className={`px-1.5 py-0.5 rounded hover:bg-slate-800 transition-colors ${
+              (layerState.predictionOpacity ?? 0.85) === 0.85 ? 'text-orange-400 font-bold bg-slate-800' : ''
+            }`}
+          >
+            Balanced
+          </button>
+          <button
+            onClick={() => onChangeLayerState({ predictionOpacity: 1 })}
+            className={`px-1.5 py-0.5 rounded hover:bg-slate-800 transition-colors ${
+              (layerState.predictionOpacity ?? 0.85) === 1 ? 'text-orange-400 font-bold bg-slate-800' : ''
+            }`}
+          >
+            AI Overlay
+          </button>
+        </div>
+      </div>
+
+      {/* 2. Base Satellite Rasters */}
+      <div className="space-y-2">
         <span className="text-[10px] font-mono uppercase text-slate-500 tracking-wider">
           Satellite Observation Rasters
         </span>
@@ -118,7 +150,7 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
         </div>
       </div>
 
-      {/* 2. Active Fire Detection (AF) */}
+      {/* 3. Active Fire Detection (AF) */}
       <div className="space-y-2">
         <span className="text-[10px] font-mono uppercase text-slate-500 tracking-wider">
           Active Fire (Flaming Perimeter)
@@ -170,7 +202,7 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
           </button>
         </div>
 
-        {/* Confusion Legend when active */}
+        {/* Confusion Legend */}
         {layerState.activeFireMode === 'confusion' && (
           <div className="bg-slate-950 p-2 rounded border border-slate-800 text-[11px] space-y-1">
             <div className="flex items-center space-x-2 text-emerald-300">
@@ -189,7 +221,7 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
         )}
       </div>
 
-      {/* 3. Cumulative Burned Area (BA) */}
+      {/* 4. Cumulative Burned Area (BA) */}
       <div className="space-y-2">
         <span className="text-[10px] font-mono uppercase text-slate-500 tracking-wider">
           Cumulative Burned Area Scar
@@ -229,7 +261,7 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
         </div>
       </div>
 
-      {/* 4. Next-Day Spread Prediction */}
+      {/* 5. Next-Day Spread Prediction */}
       <div className="bg-slate-950/70 p-3 rounded-lg border border-orange-950/50 space-y-2.5">
         <div className="flex items-center justify-between">
           <label className="flex items-center space-x-2 text-xs font-semibold cursor-pointer">
@@ -274,7 +306,6 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
               </div>
             </div>
 
-            {/* Toggle Actual Next Day newly burned scar overlay */}
             <label className="flex items-center space-x-2 text-[11px] text-slate-300 cursor-pointer pt-1">
               <input
                 type="checkbox"

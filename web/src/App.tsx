@@ -27,7 +27,7 @@ import {
   fetchModels,
   fetchImportance
 } from './services/dataService';
-import { Flame, MapPin, Maximize2, Calendar, Radio } from 'lucide-react';
+import { Flame, MapPin, Calendar } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [manifest, setManifest] = useState<Manifest | null>(null);
@@ -45,6 +45,7 @@ export const App: React.FC = () => {
   const [isMethodologyOpen, setIsMethodologyOpen] = useState<boolean>(false);
   const [inspectedSample, setInspectedSample] = useState<InspectorSample | null>(null);
   const [showMetrics, setShowMetrics] = useState<boolean>(true);
+  const [isSwitchingFire, setIsSwitchingFire] = useState<boolean>(false);
 
   const [layerState, setLayerState] = useState<LayerState>({
     showComposite: true,
@@ -56,13 +57,12 @@ export const App: React.FC = () => {
     showNextDay: true, // Default to next-day prediction
     nextDayThreshold: 0.35,
     showActualNextOverlay: false,
-    swipeCompare: false,
-    swipePosition: 50
+    predictionOpacity: 0.85
   });
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // 1. Load initial manifest & models
+  // 1. Initial Data Initialization (atomic load of first fire)
   useEffect(() => {
     async function init() {
       try {
@@ -76,7 +76,6 @@ export const App: React.FC = () => {
         setImportanceData(imp);
 
         if (m.fires.length > 0) {
-          // Select Walkers Fire (US_2021_CA3627811855020210815) or Bush Fire if present, else first
           const prominentFire =
             m.fires.find(
               (f) =>
@@ -84,7 +83,19 @@ export const App: React.FC = () => {
                 f.id === '24103571' ||
                 f.area_km2 > 100
             ) || m.fires[0];
+
+          const [meta, metrics] = await Promise.all([
+            fetchFireMeta(prominentFire.id),
+            fetchFireMetrics(prominentFire.id)
+          ]);
+
+          const activeDay = metrics.days.find((d) => d.f1_af > 0.4 || d.new_km2 > 0.5);
+          const targetDate = activeDay ? activeDay.date : (meta.days[0] || '');
+
           setSelectedFire(prominentFire);
+          setFireMeta(meta);
+          setFireMetrics(metrics);
+          setCurrentDate(targetDate);
         }
       } catch (err) {
         console.error('Failed to initialize FireLens data:', err);
@@ -95,36 +106,31 @@ export const App: React.FC = () => {
     init();
   }, []);
 
-  // 2. Load fire metadata and metrics when selected fire changes
-  useEffect(() => {
-    if (!selectedFire) return;
+  // 2. Atomic Fire Switch Handler: fetches meta & metrics before updating state
+  const handleSelectFire = async (fire: ManifestFire) => {
+    if (fire.id === selectedFire?.id) return;
+    setIsSwitchingFire(true);
+    try {
+      const [meta, metrics] = await Promise.all([
+        fetchFireMeta(fire.id),
+        fetchFireMetrics(fire.id)
+      ]);
 
-    async function loadFireData() {
-      try {
-        const [meta, metrics] = await Promise.all([
-          fetchFireMeta(selectedFire!.id),
-          fetchFireMetrics(selectedFire!.id)
-        ]);
-        setFireMeta(meta);
-        setFireMetrics(metrics);
+      const activeDay = metrics.days.find((d) => d.f1_af > 0.4 || d.new_km2 > 0.5);
+      const targetDate = activeDay ? activeDay.date : (meta.days[0] || '');
 
-        if (meta.days.length > 0) {
-          // Select a day with active fire detections if possible
-          const activeDay = metrics.days.find((d) => d.f1_af > 0.4 || d.new_km2 > 0.5);
-          if (activeDay) {
-            setCurrentDate(activeDay.date);
-          } else {
-            const mid = Math.floor(meta.days.length / 2);
-            setCurrentDate(meta.days[mid]);
-          }
-        }
-        setInspectedSample(null);
-      } catch (err) {
-        console.error(`Error loading fire data for ${selectedFire!.id}:`, err);
-      }
+      // Synchronously batch-update all fire state to prevent coordinate/layer desync
+      setSelectedFire(fire);
+      setFireMeta(meta);
+      setFireMetrics(metrics);
+      setCurrentDate(targetDate);
+      setInspectedSample(null);
+    } catch (err) {
+      console.error(`Error switching to fire ${fire.id}:`, err);
+    } finally {
+      setIsSwitchingFire(false);
     }
-    loadFireData();
-  }, [selectedFire]);
+  };
 
   const handleUpdateLayerState = (newState: Partial<LayerState>) => {
     setLayerState((prev) => ({ ...prev, ...newState }));
@@ -157,12 +163,13 @@ export const App: React.FC = () => {
       <Header
         fires={manifest.fires}
         selectedFire={selectedFire}
-        onSelectFire={(f) => setSelectedFire(f)}
+        onSelectFire={handleSelectFire}
         activeTab={activeTab}
         onChangeTab={(t) => setActiveTab(t)}
         onOpenMethodology={() => setIsMethodologyOpen(true)}
         showMetrics={showMetrics}
         onToggleMetrics={() => setShowMetrics((v) => !v)}
+        isSwitchingFire={isSwitchingFire}
       />
 
       {/* Main Body View */}
@@ -205,7 +212,7 @@ export const App: React.FC = () => {
                 </div>
               </div>
 
-              {/* Layer Toggles & Threshold Controls */}
+              {/* Layer Toggles, Threshold Controls & Slide to Compare */}
               <LayerControls
                 layerState={layerState}
                 onChangeLayerState={handleUpdateLayerState}
