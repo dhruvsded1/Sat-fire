@@ -9,7 +9,7 @@ import {
   Tooltip,
   ResponsiveContainer
 } from 'recharts';
-import { Activity, Flame, TrendingUp, BarChart2, ShieldCheck } from 'lucide-react';
+import { Activity, TrendingUp, BarChart2 } from 'lucide-react';
 import { DayMetric, FireMetricsSummary } from '../types/contract';
 
 interface MetricsPanelProps {

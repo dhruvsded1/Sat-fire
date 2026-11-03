@@ -27,6 +27,7 @@ import {
   fetchModels,
   fetchImportance
 } from './services/dataService';
+import { pixelSampler } from './services/pixelSampler';
 import { Flame, MapPin, Calendar } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -61,6 +62,19 @@ export const App: React.FC = () => {
   });
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // Dynamically re-sample active inspected coordinates when timeline date changes
+  useEffect(() => {
+    if (inspectedSample && !isSwitchingFire) {
+      const timer = window.setTimeout(() => {
+        const updated = pixelSampler.sample(inspectedSample.lng, inspectedSample.lat);
+        if (updated) {
+          setInspectedSample(updated);
+        }
+      }, 120);
+      return () => clearTimeout(timer);
+    }
+  }, [currentDate]);
 
   // 1. Initial Data Initialization (atomic load of first fire)
   useEffect(() => {
@@ -225,10 +239,11 @@ export const App: React.FC = () => {
                 <MapViewer
                   fireId={selectedFire.id}
                   bounds={fireMeta.bounds}
+                  days={fireMeta.days}
                   currentDate={currentDate}
                   currentMetric={currentDayMetric}
                   layerState={layerState}
-                  onChangeLayerState={handleUpdateLayerState}
+                  inspectedSample={inspectedSample}
                   onSamplePixel={(s) => setInspectedSample(s)}
                   showMetrics={showMetrics}
                   onToggleMetrics={() => setShowMetrics((v) => !v)}

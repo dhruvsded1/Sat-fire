@@ -9,16 +9,20 @@ class PixelSampler {
   private size: [number, number] = [256, 256];
 
   async loadDayImages(fireId: string, date: string, bounds: Bounds, size: [number, number] = [256, 256]) {
-    if (this.currentFireId === fireId && this.currentDate === date) {
+    // Immediately update spatial bounds and target fire/date
+    this.bounds = bounds;
+    this.size = size;
+
+    if (this.currentFireId === fireId && this.currentDate === date && Object.keys(this.canvases).length > 0) {
       return;
     }
     this.currentFireId = fireId;
     this.currentDate = date;
-    this.bounds = bounds;
-    this.size = size;
 
     const urls = getDayRasterUrls(fireId, date);
     const keys: (keyof typeof urls)[] = ['thermal', 'afGt', 'afPred', 'baGt', 'baPred', 'predNext'];
+
+    const newCanvases: { [key: string]: { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } } = {};
 
     await Promise.all(
       keys.map((key) => {
@@ -32,7 +36,7 @@ class PixelSampler {
             const ctx = canvas.getContext('2d');
             if (ctx) {
               ctx.drawImage(img, 0, 0, size[0], size[1]);
-              this.canvases[key] = { canvas, ctx };
+              newCanvases[key] = { canvas, ctx };
             }
             resolve();
           };
@@ -41,6 +45,11 @@ class PixelSampler {
         });
       })
     );
+
+    // Commit only if fireId and date have not changed during async loading
+    if (this.currentFireId === fireId && this.currentDate === date) {
+      this.canvases = newCanvases;
+    }
   }
 
   sample(lng: number, lat: number): InspectorSample | null {
@@ -66,13 +75,26 @@ class PixelSampler {
       }
     };
 
+    // Mask presence check: contract specification v1 states mask PNGs are RGBA with
+    // alpha = 0 where label is 0, and alpha = 255 where label is 1 (AF: 255, 69, 0; BA: 88, 28, 135)
+    const getMaskPresent = (key: string): boolean => {
+      const entry = this.canvases[key];
+      if (!entry) return false;
+      try {
+        const p = entry.ctx.getImageData(px, py, 1, 1).data;
+        return p[3] > 40 || p[0] > 40 || p[2] > 40;
+      } catch {
+        return false;
+      }
+    };
+
     const thermalVal = getPixelVal('thermal');
     const estimatedKelvin = Math.round((285.0 + (thermalVal / 255.0) * (440.0 - 285.0)) * 10) / 10;
 
-    const isActiveFireGT = getPixelVal('afGt') > 120;
-    const isActiveFirePred = getPixelVal('afPred') > 120;
-    const isBurnedAreaGT = getPixelVal('baGt') > 120;
-    const isBurnedAreaPred = getPixelVal('baPred') > 120;
+    const isActiveFireGT = getMaskPresent('afGt');
+    const isActiveFirePred = getMaskPresent('afPred');
+    const isBurnedAreaGT = getMaskPresent('baGt');
+    const isBurnedAreaPred = getMaskPresent('baPred');
     const nextDayProb = Math.round((getPixelVal('predNext') / 255.0) * 100) / 100;
 
     let confusionCategory: InspectorSample['confusionCategory'] = 'Unburned / True Negative';

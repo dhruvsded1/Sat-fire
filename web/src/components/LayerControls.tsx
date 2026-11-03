@@ -3,10 +3,7 @@ import {
   Layers,
   Thermometer,
   TrendingUp,
-  Sliders,
-  CheckCircle2,
-  Eye,
-  Flame
+  Sliders
 } from 'lucide-react';
 import { LayerState } from '../types/contract';
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Satellite, Flame, ShieldAlert, Cpu, BarChart2, BookOpen, Layers, CheckCircle2 } from 'lucide-react';
+import { X, Satellite, Flame, ShieldAlert, Cpu, BarChart2, BookOpen, CheckCircle2 } from 'lucide-react';
 
 interface MethodologyModalProps {
   isOpen: boolean;

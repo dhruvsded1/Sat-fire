@@ -64,7 +64,7 @@ export const Header: React.FC<HeaderProps> = ({
               if (f) onSelectFire(f);
             }}
             aria-label="Wildfire Event"
-            className="bg-slate-800 hover:bg-slate-750 disabled:opacity-50 border border-slate-700 text-slate-200 text-xs rounded px-2.5 py-1 pr-7 focus:outline-none focus:border-orange-500 font-medium cursor-pointer transition-colors"
+            className="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 border border-slate-700 text-slate-200 text-xs rounded px-2.5 py-1 pr-7 focus:outline-none focus:border-orange-500 font-medium cursor-pointer transition-colors"
           >
             {fires.map((fire) => (
               <option key={fire.id} value={fire.id}>

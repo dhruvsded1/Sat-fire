@@ -1,5 +1,5 @@
 import React from 'react';
-import { Target, Thermometer, Flame, AlertCircle, Compass, Zap } from 'lucide-react';
+import { Target, Thermometer } from 'lucide-react';
 import { InspectorSample } from '../types/contract';
 
 interface InspectorCardProps {

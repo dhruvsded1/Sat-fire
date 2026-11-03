@@ -165,7 +165,7 @@ export const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
         <div className="flex items-center space-x-2">
           <button
             onClick={toggleSpeed}
-            className="flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-mono bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 transition-colors"
+            className="flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-mono bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
             title="Playback Speed"
           >
             <Zap className="w-3 h-3 text-amber-400" />

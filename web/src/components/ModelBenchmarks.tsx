@@ -8,8 +8,8 @@ import {
   Legend,
   ResponsiveContainer
 } from 'recharts';
-import { Cpu, Award, Zap, Layers, Sparkles, CheckCircle2 } from 'lucide-react';
-import { ModelsContract, ModelItem } from '../types/contract';
+import { Cpu, Award, Zap, Layers } from 'lucide-react';
+import { ModelsContract } from '../types/contract';
 
 interface ModelBenchmarksProps {
   modelsData: ModelsContract | null;

@@ -98,8 +98,6 @@ export interface LayerState {
   nextDayThreshold: number; // 0.1 to 0.9
   showActualNextOverlay: boolean;
   predictionOpacity: number; // 0 to 1 (Slide to Compare)
-  swipeCompare?: boolean;
-  swipePosition?: number; // 0 to 100%
 }
 
 export interface InspectorSample {

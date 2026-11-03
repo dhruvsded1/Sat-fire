@@ -1,10 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import maplibregl from 'maplibre-gl';
 import {
   Satellite,
   Thermometer,
   RefreshCw,
-  BarChart3
+  BarChart3,
+  Calendar
 } from 'lucide-react';
 import { Bounds, LayerState, DayMetric, InspectorSample } from '../types/contract';
 import { getDayRasterUrls } from '../services/dataService';
@@ -13,10 +14,12 @@ import { pixelSampler } from '../services/pixelSampler';
 interface MapViewerProps {
   fireId: string;
   bounds: Bounds;
+  days?: string[];
   currentDate: string;
   currentMetric: DayMetric | undefined;
   layerState: LayerState;
-  onChangeLayerState: (newState: Partial<LayerState>) => void;
+  inspectedSample?: InspectorSample | null;
+  onChangeLayerState?: (newState: Partial<LayerState>) => void;
   onSamplePixel: (sample: InspectorSample | null) => void;
   showMetrics?: boolean;
   onToggleMetrics?: () => void;
@@ -59,10 +62,11 @@ const FALLBACK_DARK_STYLE: maplibregl.StyleSpecification = {
 export const MapViewer: React.FC<MapViewerProps> = ({
   fireId,
   bounds,
+  days = [],
   currentDate,
   currentMetric,
   layerState,
-  onChangeLayerState,
+  inspectedSample,
   onSamplePixel,
   showMetrics = true,
   onToggleMetrics
@@ -70,6 +74,12 @@ export const MapViewer: React.FC<MapViewerProps> = ({
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const inspectMarkerRef = useRef<maplibregl.Marker | null>(null);
+
+  // Active refs to eliminate stale closure bugs on dynamically switched fires
+  const boundsRef = useRef<Bounds>(bounds);
+  boundsRef.current = bounds;
+  const onSamplePixelRef = useRef(onSamplePixel);
+  onSamplePixelRef.current = onSamplePixel;
 
   const [mapLoaded, setMapLoaded] = useState<boolean>(false);
 
@@ -79,21 +89,25 @@ export const MapViewer: React.FC<MapViewerProps> = ({
   const [processedConfusionUrl, setProcessedConfusionUrl] = useState<string>('');
 
   const [west, south, east, north] = bounds;
-  const imageCoordinates: [[number, number], [number, number], [number, number], [number, number]] = [
-    [west, north],
-    [east, north],
-    [east, south],
-    [west, south]
-  ];
+  const imageCoordinates = useMemo<[[number, number], [number, number], [number, number], [number, number]]>(
+    () => [
+      [west, north],
+      [east, north],
+      [east, south],
+      [west, south]
+    ],
+    [west, south, east, north]
+  );
 
   // 1. Initialize MapLibre ONCE on mount
   useEffect(() => {
     if (!mapContainerRef.current) return;
 
+    const [initW, initS, initE, initN] = boundsRef.current;
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
       style: FALLBACK_DARK_STYLE,
-      center: [(west + east) / 2, (south + north) / 2],
+      center: [(initW + initE) / 2, (initS + initN) / 2],
       zoom: 10,
       attributionControl: false
     });
@@ -103,10 +117,11 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     map.on('load', () => {
       setMapLoaded(true);
       map.resize();
+      const [w, s, e, n] = boundsRef.current;
       map.fitBounds(
         [
-          [west, south],
-          [east, north]
+          [w, s],
+          [e, n]
         ],
         { padding: 40, duration: 800 }
       );
@@ -120,10 +135,10 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     });
     ro.observe(mapContainerRef.current);
 
-    // Map click inspector
+    // Map click inspector - uses current onSamplePixelRef to prevent stale handler
     map.on('click', (e) => {
       const sample = pixelSampler.sample(e.lngLat.lng, e.lngLat.lat);
-      onSamplePixel(sample);
+      onSamplePixelRef.current(sample);
 
       if (sample) {
         if (!inspectMarkerRef.current) {
@@ -139,9 +154,9 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       }
     });
 
-    // Cursor style
+    // Dynamic cursor styling - reads boundsRef to stay accurate across all fire switches
     map.on('mousemove', (e) => {
-      const [w, s, ea, n] = bounds;
+      const [w, s, ea, n] = boundsRef.current;
       if (e.lngLat.lng >= w && e.lngLat.lng <= ea && e.lngLat.lat >= s && e.lngLat.lat <= n) {
         map.getCanvas().style.cursor = 'crosshair';
       } else {
@@ -177,8 +192,17 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     }
   }, [fireId, bounds, mapLoaded]);
 
+  // Remove marker if sample is cleared externally (e.g. clicking Close on InspectorCard)
+  useEffect(() => {
+    if (!inspectedSample && inspectMarkerRef.current) {
+      inspectMarkerRef.current.remove();
+      inspectMarkerRef.current = null;
+    }
+  }, [inspectedSample]);
+
   // 3. Pre-process dynamic canvas rasters (Confusion & Next-Day Probability Filter)
   useEffect(() => {
+    let cancelled = false;
     pixelSampler.loadDayImages(fireId, currentDate, bounds, [256, 256]);
 
     const urls = getDayRasterUrls(fireId, currentDate);
@@ -187,6 +211,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     const nextImg = new Image();
     nextImg.crossOrigin = 'anonymous';
     nextImg.onload = () => {
+      if (cancelled) return;
       const c = document.createElement('canvas');
       c.width = 256;
       c.height = 256;
@@ -210,7 +235,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
           }
         }
         ctx.putImageData(imgData, 0, 0);
-        setProcessedNextDayUrl(c.toDataURL());
+        if (!cancelled) setProcessedNextDayUrl(c.toDataURL());
       }
     };
     nextImg.src = urls.predNext;
@@ -222,6 +247,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     const onBothLoaded = () => {
       loadedCount++;
       if (loadedCount === 2) {
+        if (cancelled) return;
         const w = afPredImg.naturalWidth || 512;
         const h = afPredImg.naturalHeight || 512;
         const c = document.createElement('canvas');
@@ -268,7 +294,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
               }
             }
             ctx.putImageData(predData, 0, 0);
-            setProcessedConfusionUrl(c.toDataURL());
+            if (!cancelled) setProcessedConfusionUrl(c.toDataURL());
           }
         }
       }
@@ -279,6 +305,10 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     afGtImg.onload = onBothLoaded;
     afPredImg.src = urls.afPred;
     afGtImg.src = urls.afGt;
+
+    return () => {
+      cancelled = true;
+    };
   }, [fireId, currentDate, layerState.nextDayThreshold, bounds]);
 
   // 4. Update MapLibre Image Layers
@@ -370,10 +400,21 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     } else {
       updateImageLayer('source-af', 'layer-af', urls.afPred, false, 0.0);
     }
+
+    // 6. Actual Next-Day Growth Overlay (when enabled via LayerControls)
+    const nextIdx = days ? days.indexOf(currentDate) + 1 : -1;
+    const nextDate = days && nextIdx > 0 && nextIdx < days.length ? days[nextIdx] : null;
+    if (layerState.showActualNextOverlay && nextDate) {
+      const nextUrls = getDayRasterUrls(fireId, nextDate);
+      updateImageLayer('source-actual-next', 'layer-actual-next', nextUrls.afGt, true, 0.85);
+    } else {
+      updateImageLayer('source-actual-next', 'layer-actual-next', urls.afGt, false, 0.0);
+    }
   }, [
     mapLoaded,
     fireId,
     currentDate,
+    days,
     layerState,
     processedNextDayUrl,
     processedConfusionUrl,
@@ -392,6 +433,9 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       );
     }
   };
+
+  const nextIdx = days ? days.indexOf(currentDate) + 1 : -1;
+  const nextDate = days && nextIdx > 0 && nextIdx < days.length ? days[nextIdx] : null;
 
   return (
     <div className="relative w-full h-full overflow-hidden bg-slate-950">
@@ -416,6 +460,16 @@ export const MapViewer: React.FC<MapViewerProps> = ({
               <span className="text-white font-semibold">+{currentMetric.new_km2} km²</span>
             </div>
           </div>
+
+          {layerState.showActualNextOverlay && (
+            <div className="flex items-center space-x-1.5 border-l border-slate-800 pl-3">
+              <Calendar className="w-4 h-4 text-emerald-400" />
+              <div className="text-[11px] font-mono leading-tight">
+                <span className="text-slate-400 block text-[9px]">NEXT VERIFICATION</span>
+                <span className="text-emerald-400 font-semibold">{nextDate || 'Final Observation'}</span>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -461,6 +515,12 @@ export const MapViewer: React.FC<MapViewerProps> = ({
           <span className="w-2.5 h-2.5 rounded-sm bg-gradient-to-r from-amber-400 to-orange-600" />
           <span>Next-Day Spread</span>
         </div>
+        {layerState.showActualNextOverlay && nextDate && (
+          <div className="flex items-center space-x-1.5 text-emerald-400">
+            <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 border border-emerald-400" />
+            <span>Actual Next Perimeter</span>
+          </div>
+        )}
         <div className="text-slate-500 border-l border-slate-800 pl-3">
           Pixel: 375m VIIRS
         </div>
