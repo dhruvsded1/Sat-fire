@@ -1,0 +1,136 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FireLens Contract Schema",
+  "definitions": {
+    "bounds": {
+      "type": "array",
+      "items": { "type": "number" },
+      "minItems": 4,
+      "maxItems": 4,
+      "description": "[West_Lon, South_Lat, East_Lon, North_Lat] in EPSG:4326"
+    },
+    "manifest_fire": {
+      "type": "object",
+      "required": ["id", "name", "state", "start", "end", "bounds", "area_km2"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string" },
+        "state": { "type": "string" },
+        "start": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "end": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "bounds": { "$ref": "#/definitions/bounds" },
+        "area_km2": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": true
+    },
+    "manifest": {
+      "type": "object",
+      "required": ["contract_version", "fires"],
+      "properties": {
+        "contract_version": { "type": "integer", "enum": [1] },
+        "fires": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/manifest_fire" },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": true
+    },
+    "task_metric": {
+      "type": "object",
+      "required": ["f1", "iou"],
+      "properties": {
+        "f1": { "type": "number", "minimum": 0, "maximum": 1 },
+        "iou": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "additionalProperties": true
+    },
+    "model_item": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string" },
+        "af": { "$ref": "#/definitions/task_metric" },
+        "ba": { "$ref": "#/definitions/task_metric" },
+        "prediction": { "$ref": "#/definitions/task_metric" }
+      },
+      "additionalProperties": true
+    },
+    "models": {
+      "type": "object",
+      "required": ["models"],
+      "properties": {
+        "contract_version": { "type": "integer", "enum": [1] },
+        "tasks": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "models": {
+          "type": "object",
+          "required": ["baseline", "ours", "paper"],
+          "properties": {
+            "baseline": { "$ref": "#/definitions/model_item" },
+            "ours": { "$ref": "#/definitions/model_item" },
+            "paper": { "$ref": "#/definitions/model_item" }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "importance_item": {
+      "type": "object",
+      "required": ["channel", "f1_drop"],
+      "properties": {
+        "channel": { "type": "string" },
+        "f1_drop": { "type": "number" }
+      },
+      "additionalProperties": true
+    },
+    "importance": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/importance_item" },
+      "minItems": 1
+    },
+    "meta": {
+      "type": "object",
+      "required": ["id", "bounds", "pixel_size_m", "png_size", "days"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "state": { "type": "string" },
+        "bounds": { "$ref": "#/definitions/bounds" },
+        "pixel_size_m": { "type": "number", "exclusiveMinimum": 0 },
+        "png_size": {
+          "type": "array",
+          "items": { "type": "integer", "exclusiveMinimum": 0 },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "days": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": true
+    },
+    "day_metrics": {
+      "type": "object",
+      "required": ["f1_af", "iou_af", "f1_ba", "iou_ba", "burned_km2", "new_km2"],
+      "properties": {
+        "f1_af": { "type": "number", "minimum": 0, "maximum": 1 },
+        "iou_af": { "type": "number", "minimum": 0, "maximum": 1 },
+        "f1_ba": { "type": "number", "minimum": 0, "maximum": 1 },
+        "iou_ba": { "type": "number", "minimum": 0, "maximum": 1 },
+        "burned_km2": { "type": "number", "minimum": 0 },
+        "new_km2": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": true
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/definitions/day_metrics" }
+    }
+  }
+}

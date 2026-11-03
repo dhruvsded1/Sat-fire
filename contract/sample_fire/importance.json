@@ -1,0 +1,38 @@
+[
+  {
+    "channel": "VIIRS_I4 (Thermal)",
+    "f1_drop": 0.185
+  },
+  {
+    "channel": "VIIRS_I5 (Thermal)",
+    "f1_drop": 0.112
+  },
+  {
+    "channel": "VIIRS_I1 (Red)",
+    "f1_drop": 0.045
+  },
+  {
+    "channel": "VIIRS_I2 (NIR)",
+    "f1_drop": 0.038
+  },
+  {
+    "channel": "VIIRS_I3 (SWIR)",
+    "f1_drop": 0.032
+  },
+  {
+    "channel": "VIIRS_M11",
+    "f1_drop": 0.051
+  },
+  {
+    "channel": "Weather (Wind)",
+    "f1_drop": 0.028
+  },
+  {
+    "channel": "Weather (Humidity)",
+    "f1_drop": 0.022
+  },
+  {
+    "channel": "DEM (Terrain Slope)",
+    "f1_drop": 0.019
+  }
+]

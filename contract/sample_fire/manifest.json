@@ -1,0 +1,19 @@
+{
+  "contract_version": 1,
+  "fires": [
+    {
+      "id": "sample_fire_01",
+      "name": "Sample Rim Fire",
+      "state": "CA",
+      "start": "2021-08-15",
+      "end": "2021-08-16",
+      "bounds": [
+        -120.25,
+        37.8,
+        -119.8,
+        38.15
+      ],
+      "area_km2": 85.4
+    }
+  ]
+}

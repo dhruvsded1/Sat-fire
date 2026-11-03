@@ -1,0 +1,20 @@
+{
+  "id": "sample_fire_01",
+  "name": "Sample Rim Fire",
+  "state": "CA",
+  "bounds": [
+    -120.25,
+    37.8,
+    -119.8,
+    38.15
+  ],
+  "pixel_size_m": 375,
+  "png_size": [
+    128,
+    128
+  ],
+  "days": [
+    "2021-08-15",
+    "2021-08-16"
+  ]
+}
