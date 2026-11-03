@@ -1,6 +1,15 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
-import { Compass, Thermometer, Wind, SplitSquareVertical, RefreshCw, ZoomIn, ZoomOut } from 'lucide-react';
+import {
+  Compass,
+  Thermometer,
+  Wind,
+  SplitSquareVertical,
+  RefreshCw,
+  ZoomIn,
+  ZoomOut,
+  BarChart3
+} from 'lucide-react';
 import { Bounds, LayerState, DayMetric, InspectorSample } from '../types/contract';
 import { getDayRasterUrls } from '../services/dataService';
 import { pixelSampler } from '../services/pixelSampler';
@@ -13,6 +22,8 @@ interface MapViewerProps {
   layerState: LayerState;
   onChangeLayerState: (newState: Partial<LayerState>) => void;
   onSamplePixel: (sample: InspectorSample | null) => void;
+  showMetrics?: boolean;
+  onToggleMetrics?: () => void;
 }
 
 // Fallback dark style in case external tile services are unreachable
@@ -56,14 +67,15 @@ export const MapViewer: React.FC<MapViewerProps> = ({
   currentMetric,
   layerState,
   onChangeLayerState,
-  onSamplePixel
+  onSamplePixel,
+  showMetrics = true,
+  onToggleMetrics
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const inspectMarkerRef = useRef<maplibregl.Marker | null>(null);
 
   const [mapLoaded, setMapLoaded] = useState<boolean>(false);
-  const [activeLayersUrl, setActiveLayersUrl] = useState<string>('');
 
   // Processed thresholded next-day canvas URL
   const [processedNextDayUrl, setProcessedNextDayUrl] = useState<string>('');
@@ -82,6 +94,8 @@ export const MapViewer: React.FC<MapViewerProps> = ({
   useEffect(() => {
     if (!mapContainerRef.current) return;
 
+    setMapLoaded(false);
+
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
       style: FALLBACK_DARK_STYLE,
@@ -94,6 +108,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
     map.on('load', () => {
       setMapLoaded(true);
+      map.resize();
       map.fitBounds(
         [
           [west, south],
@@ -102,6 +117,14 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         { padding: 40, duration: 800 }
       );
     });
+
+    // Handle container resizing smoothly
+    const ro = new ResizeObserver(() => {
+      if (mapRef.current) {
+        mapRef.current.resize();
+      }
+    });
+    ro.observe(mapContainerRef.current);
 
     // Map click inspector
     map.on('click', (e) => {
@@ -134,6 +157,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     mapRef.current = map;
 
     return () => {
+      ro.disconnect();
       map.remove();
       mapRef.current = null;
     };
@@ -209,19 +233,19 @@ export const MapViewer: React.FC<MapViewerProps> = ({
               const isGt = gtData[i + 3] > 40 || gtData[i] > 80;
 
               if (isPred && isGt) {
-                // Correct (True Positive): Green (#22C55E / rgba(34, 197, 94, 255))
+                // Correct (True Positive): Green
                 d[i] = 34;
                 d[i + 1] = 197;
                 d[i + 2] = 94;
                 d[i + 3] = 235;
               } else if (isPred && !isGt) {
-                // False Alarm (False Positive): Amber (#F59E0B / rgba(245, 158, 11, 255))
+                // False Alarm (False Positive): Amber
                 d[i] = 245;
                 d[i + 1] = 158;
                 d[i + 2] = 11;
                 d[i + 3] = 235;
               } else if (!isPred && isGt) {
-                // Missed (False Negative): Blue (#3B82F6 / rgba(59, 130, 246, 255))
+                // Missed (False Negative): Blue
                 d[i] = 59;
                 d[i + 1] = 130;
                 d[i + 2] = 246;
@@ -286,7 +310,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       }
     };
 
-    // Composite
+    // 1. Composite Base
     updateImageLayer(
       'source-composite',
       'layer-composite',
@@ -295,7 +319,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       layerState.compositeOpacity
     );
 
-    // Thermal
+    // 2. Thermal
     updateImageLayer(
       'source-thermal',
       'layer-thermal',
@@ -304,18 +328,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       layerState.thermalOpacity
     );
 
-    // Active Fire: GT, Pred, or Confusion
-    if (layerState.activeFireMode === 'gt') {
-      updateImageLayer('source-af', 'layer-af', urls.afGt, true, 0.85);
-    } else if (layerState.activeFireMode === 'pred') {
-      updateImageLayer('source-af', 'layer-af', urls.afPred, true, 0.85);
-    } else if (layerState.activeFireMode === 'confusion' && processedConfusionUrl) {
-      updateImageLayer('source-af', 'layer-af', processedConfusionUrl, true, 0.95);
-    } else {
-      updateImageLayer('source-af', 'layer-af', urls.afPred, false, 0.0);
-    }
-
-    // Burned Area: GT or Pred
+    // 3. Burned Area Scar (underneath flame front)
     if (layerState.burnedAreaMode === 'gt') {
       updateImageLayer('source-ba', 'layer-ba', urls.baGt, true, 0.7);
     } else if (layerState.burnedAreaMode === 'pred') {
@@ -324,11 +337,22 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       updateImageLayer('source-ba', 'layer-ba', urls.baGt, false, 0.0);
     }
 
-    // Next-Day Spread Prediction
+    // 4. Next-Day Spread Prediction
     if (layerState.showNextDay && processedNextDayUrl) {
       updateImageLayer('source-next', 'layer-next', processedNextDayUrl, true, 0.85);
     } else {
       updateImageLayer('source-next', 'layer-next', urls.predNext, false, 0.0);
+    }
+
+    // 5. Active Fire Front (Top Layer)
+    if (layerState.activeFireMode === 'gt') {
+      updateImageLayer('source-af', 'layer-af', urls.afGt, true, 0.85);
+    } else if (layerState.activeFireMode === 'pred') {
+      updateImageLayer('source-af', 'layer-af', urls.afPred, true, 0.85);
+    } else if (layerState.activeFireMode === 'confusion' && processedConfusionUrl) {
+      updateImageLayer('source-af', 'layer-af', processedConfusionUrl, true, 0.95);
+    } else {
+      updateImageLayer('source-af', 'layer-af', urls.afPred, false, 0.0);
     }
   }, [
     mapLoaded,
@@ -409,10 +433,27 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         >
           <RefreshCw className="w-4 h-4" />
         </button>
+
+        {onToggleMetrics && (
+          <button
+            onClick={onToggleMetrics}
+            className={`p-1.5 rounded text-xs flex items-center space-x-1.5 transition-colors ${
+              showMetrics
+                ? 'bg-orange-600/80 text-white shadow-sm'
+                : 'hover:bg-slate-800 text-slate-300 hover:text-white'
+            }`}
+            title={showMetrics ? 'Collapse Metrics Panel' : 'Expand Metrics Panel'}
+          >
+            <BarChart3 className="w-4 h-4" />
+            <span className="text-[11px] font-mono hidden sm:inline">
+              {showMetrics ? 'Hide Metrics' : 'Metrics'}
+            </span>
+          </button>
+        )}
       </div>
 
-      {/* Bottom Map Legend */}
-      <div className="absolute bottom-4 left-4 z-10 bg-slate-900/85 backdrop-blur border border-slate-800 rounded-lg px-3 py-1.5 text-[10px] font-mono text-slate-400 flex items-center space-x-4 shadow-lg select-none">
+      {/* Map Legend (Positioned above timeline player) */}
+      <div className="absolute bottom-28 left-4 z-10 bg-slate-900/85 backdrop-blur border border-slate-800 rounded-lg px-3 py-1.5 text-[10px] font-mono text-slate-400 flex items-center space-x-4 shadow-lg select-none hidden sm:flex">
         <div className="flex items-center space-x-1.5">
           <span className="w-2.5 h-2.5 rounded-sm bg-orange-500 border border-orange-400" />
           <span>Active Front</span>
@@ -426,7 +467,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
           <span>Next-Day Spread</span>
         </div>
         <div className="text-slate-500 border-l border-slate-800 pl-3">
-          Pixel Size: 375m (VIIRS I-Band)
+          Pixel: 375m VIIRS
         </div>
       </div>
     </div>

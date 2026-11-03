@@ -44,6 +44,7 @@ export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'explorer' | 'benchmarks' | 'importance'>('explorer');
   const [isMethodologyOpen, setIsMethodologyOpen] = useState<boolean>(false);
   const [inspectedSample, setInspectedSample] = useState<InspectorSample | null>(null);
+  const [showMetrics, setShowMetrics] = useState<boolean>(true);
 
   const [layerState, setLayerState] = useState<LayerState>({
     showComposite: true,
@@ -160,14 +161,16 @@ export const App: React.FC = () => {
         activeTab={activeTab}
         onChangeTab={(t) => setActiveTab(t)}
         onOpenMethodology={() => setIsMethodologyOpen(true)}
+        showMetrics={showMetrics}
+        onToggleMetrics={() => setShowMetrics((v) => !v)}
       />
 
       {/* Main Body View */}
       <div className="flex-1 relative overflow-hidden">
         {activeTab === 'explorer' && (
-          <div className="w-full h-full flex flex-col lg:flex-row relative">
+          <div className="w-full h-full flex flex-col lg:flex-row relative overflow-hidden">
             {/* Left Controls & Scenario Details Panel */}
-            <div className="w-full lg:w-80 lg:min-w-[320px] p-3 border-r border-slate-800 bg-slate-950/95 overflow-y-auto space-y-3 z-20 max-h-56 lg:max-h-full">
+            <div className="w-full lg:w-80 lg:min-w-[320px] lg:max-w-[340px] shrink-0 p-3 border-r border-slate-800 bg-slate-950/95 overflow-y-auto space-y-3 z-10 max-h-56 lg:max-h-full">
               {/* Scenario Summary Card */}
               <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 space-y-2 select-none shadow-lg">
                 <div className="flex items-center justify-between">
@@ -210,45 +213,51 @@ export const App: React.FC = () => {
             </div>
 
             {/* Center: MapLibre Geospatial Canvas & Floating Timeline */}
-            <div className="flex-1 relative h-full">
-              <MapViewer
-                fireId={selectedFire.id}
-                bounds={fireMeta.bounds}
-                currentDate={currentDate}
-                currentMetric={currentDayMetric}
-                layerState={layerState}
-                onChangeLayerState={handleUpdateLayerState}
-                onSamplePixel={(s) => setInspectedSample(s)}
-              />
-
-              {/* Floating Bottom Timeline Scrubber */}
-              <div className="absolute bottom-4 left-4 right-4 max-w-2xl mx-auto z-20">
-                <TimelinePlayer
-                  days={fireMeta.days}
-                  metrics={fireMetrics.days}
+            <div className="flex-1 relative min-w-0 h-[55vh] lg:h-full flex flex-col overflow-hidden">
+              <div className="relative w-full h-full flex-1 min-h-0">
+                <MapViewer
+                  fireId={selectedFire.id}
+                  bounds={fireMeta.bounds}
                   currentDate={currentDate}
-                  onSelectDate={(d) => setCurrentDate(d)}
+                  currentMetric={currentDayMetric}
+                  layerState={layerState}
+                  onChangeLayerState={handleUpdateLayerState}
+                  onSamplePixel={(s) => setInspectedSample(s)}
+                  showMetrics={showMetrics}
+                  onToggleMetrics={() => setShowMetrics((v) => !v)}
                 />
+
+                {/* Floating Bottom Timeline Scrubber */}
+                <div className="absolute bottom-4 left-4 right-4 max-w-2xl mx-auto z-20 pointer-events-auto">
+                  <TimelinePlayer
+                    days={fireMeta.days}
+                    metrics={fireMetrics.days}
+                    currentDate={currentDate}
+                    onSelectDate={(d) => setCurrentDate(d)}
+                  />
+                </div>
               </div>
             </div>
 
             {/* Right Telemetry & Inspector Panel */}
-            <div className="w-full lg:w-88 lg:min-w-[340px] p-3 border-l border-slate-800 bg-slate-950/95 overflow-y-auto space-y-3 z-20 max-h-72 lg:max-h-full">
-              {/* Click / Hover Pixel Inspector */}
-              <InspectorCard
-                sample={inspectedSample}
-                onClear={() => setInspectedSample(null)}
-              />
+            {showMetrics && (
+              <div className="w-full lg:w-96 lg:min-w-[350px] lg:max-w-[420px] shrink-0 p-3 border-l border-slate-800 bg-slate-950/95 overflow-y-auto space-y-3 z-10 max-h-72 lg:max-h-full">
+                {/* Click / Hover Pixel Inspector */}
+                <InspectorCard
+                  sample={inspectedSample}
+                  onClear={() => setInspectedSample(null)}
+                />
 
-              {/* Daily Metrics & Recharts Progression */}
-              <MetricsPanel
-                currentMetric={currentDayMetric}
-                metrics={fireMetrics.days}
-                summary={fireMetrics.summary}
-                currentDate={currentDate}
-                onSelectDate={(d) => setCurrentDate(d)}
-              />
-            </div>
+                {/* Daily Metrics & Recharts Progression */}
+                <MetricsPanel
+                  currentMetric={currentDayMetric}
+                  metrics={fireMetrics.days}
+                  summary={fireMetrics.summary}
+                  currentDate={currentDate}
+                  onSelectDate={(d) => setCurrentDate(d)}
+                />
+              </div>
+            )}
           </div>
         )}
 

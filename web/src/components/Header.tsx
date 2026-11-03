@@ -9,6 +9,8 @@ interface HeaderProps {
   activeTab: 'explorer' | 'benchmarks' | 'importance';
   onChangeTab: (tab: 'explorer' | 'benchmarks' | 'importance') => void;
   onOpenMethodology: () => void;
+  showMetrics?: boolean;
+  onToggleMetrics?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -17,7 +19,9 @@ export const Header: React.FC<HeaderProps> = ({
   activeTab,
   onChangeTab,
   onOpenMethodology,
-  onSelectFire
+  onSelectFire,
+  showMetrics = true,
+  onToggleMetrics
 }) => {
   return (
     <header className="bg-slate-900 border-b border-slate-800 px-4 py-2.5 flex items-center justify-between select-none z-30">
@@ -106,8 +110,23 @@ export const Header: React.FC<HeaderProps> = ({
         </button>
       </div>
 
-      {/* Guide & Simulation Disclaimer */}
+      {/* Guide, Metrics Toggle & Simulation Disclaimer */}
       <div className="flex items-center space-x-2">
+        {activeTab === 'explorer' && onToggleMetrics && (
+          <button
+            onClick={onToggleMetrics}
+            className={`flex items-center space-x-1.5 px-2.5 py-1 text-xs font-mono rounded border transition-colors ${
+              showMetrics
+                ? 'bg-orange-950/80 text-orange-300 border-orange-700/80 shadow-sm'
+                : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700 hover:text-white'
+            }`}
+            title="Toggle Right Telemetry & Metrics Panel"
+          >
+            <BarChart3 className="w-3.5 h-3.5 text-orange-400" />
+            <span className="hidden md:inline">{showMetrics ? 'Hide Metrics' : 'Show Metrics'}</span>
+          </button>
+        )}
+
         <button
           onClick={onOpenMethodology}
           className="flex items-center space-x-1.5 px-2.5 py-1 text-xs text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded transition-colors"
