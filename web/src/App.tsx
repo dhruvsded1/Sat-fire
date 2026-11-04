@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Header } from './components/Header';
+import { Header, PresentationMode } from './components/Header';
 import { MapViewer } from './components/MapViewer';
 import { TimelinePlayer } from './components/TimelinePlayer';
-import { LayerControls } from './components/LayerControls';
 import { InspectorCard } from './components/InspectorCard';
 import { MetricsPanel } from './components/MetricsPanel';
 import { ModelBenchmarks } from './components/ModelBenchmarks';
@@ -28,7 +27,7 @@ import {
   fetchImportance
 } from './services/dataService';
 import { pixelSampler } from './services/pixelSampler';
-import { Flame, MapPin, Calendar, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Flame, AlertTriangle, RefreshCw, X, Sparkles } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [manifest, setManifest] = useState<Manifest | null>(null);
@@ -45,17 +44,17 @@ export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'explorer' | 'benchmarks' | 'importance'>('explorer');
   const [isMethodologyOpen, setIsMethodologyOpen] = useState<boolean>(false);
   const [inspectedSample, setInspectedSample] = useState<InspectorSample | null>(null);
-  const [showMetrics, setShowMetrics] = useState<boolean>(true);
+  const [showMetrics, setShowMetrics] = useState<boolean>(false); // Default to clean full-screen map!
   const [isSwitchingFire, setIsSwitchingFire] = useState<boolean>(false);
 
   const [layerState, setLayerState] = useState<LayerState>({
     showComposite: true,
-    compositeOpacity: 0.95,
+    compositeOpacity: 0.9,
     showThermal: false,
     thermalOpacity: 0.8,
-    activeFireMode: 'confusion', // Default to confusion matrix to highlight algorithm evaluation
+    activeFireMode: 'confusion', // Default to algorithm verification
     burnedAreaMode: 'none',
-    showNextDay: true, // Default to next-day prediction
+    showNextDay: false,
     nextDayThreshold: 0.35,
     showActualNextOverlay: false,
     predictionOpacity: 0.85
@@ -63,6 +62,55 @@ export const App: React.FC = () => {
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [initError, setInitError] = useState<string | null>(null);
+
+  // Dynamic active mode calculation
+  const activeMode: PresentationMode =
+    layerState.showThermal && !layerState.showComposite
+      ? 'physics'
+      : layerState.showNextDay
+      ? 'forecast'
+      : 'detection';
+
+  const handleSelectMode = (mode: PresentationMode) => {
+    if (mode === 'physics') {
+      setLayerState((prev) => ({
+        ...prev,
+        showComposite: false,
+        showThermal: true,
+        thermalOpacity: 0.95,
+        activeFireMode: 'pred',
+        burnedAreaMode: 'none',
+        showNextDay: false,
+        predictionOpacity: 0.8
+      }));
+    } else if (mode === 'detection') {
+      setLayerState((prev) => ({
+        ...prev,
+        showComposite: true,
+        compositeOpacity: 0.9,
+        showThermal: false,
+        thermalOpacity: 0.8,
+        activeFireMode: 'confusion',
+        burnedAreaMode: 'none',
+        showNextDay: false,
+        predictionOpacity: 0.85
+      }));
+    } else if (mode === 'forecast') {
+      setLayerState((prev) => ({
+        ...prev,
+        showComposite: true,
+        compositeOpacity: 0.85,
+        showThermal: false,
+        thermalOpacity: 0.8,
+        activeFireMode: 'none',
+        burnedAreaMode: 'none',
+        showNextDay: true,
+        nextDayThreshold: 0.35,
+        showActualNextOverlay: true,
+        predictionOpacity: 0.9
+      }));
+    }
+  };
 
   // Dynamically re-sample active inspected coordinates when timeline date changes
   useEffect(() => {
@@ -77,7 +125,7 @@ export const App: React.FC = () => {
     }
   }, [currentDate]);
 
-  // 1. Initial Data Initialization (atomic load of first fire)
+  // Initial Data Initialization
   useEffect(() => {
     async function init() {
       try {
@@ -122,7 +170,7 @@ export const App: React.FC = () => {
     init();
   }, []);
 
-  // 2. Atomic Fire Switch Handler: fetches meta & metrics before updating state
+  // Atomic Fire Switch Handler
   const handleSelectFire = async (fire: ManifestFire) => {
     if (fire.id === selectedFire?.id) return;
     setIsSwitchingFire(true);
@@ -135,7 +183,6 @@ export const App: React.FC = () => {
       const activeDay = metrics.days.find((d) => d.f1_af > 0.4 || d.new_km2 > 0.5);
       const targetDate = activeDay ? activeDay.date : (meta.days[0] || '');
 
-      // Synchronously batch-update all fire state to prevent coordinate/layer desync
       setSelectedFire(fire);
       setFireMeta(meta);
       setFireMetrics(metrics);
@@ -191,13 +238,9 @@ export const App: React.FC = () => {
 
   const currentDayMetric =
     fireMetrics.days.find((d) => d.date === currentDate) || fireMetrics.days[0];
-  const finalBurnedKm2 =
-    selectedFire.area_km2 > 0
-      ? selectedFire.area_km2
-      : fireMetrics.summary.total_burned_km2;
 
   return (
-    <div className="w-screen h-screen flex flex-col bg-slate-950 text-slate-100 overflow-hidden font-sans">
+    <div className="w-screen h-screen flex flex-col bg-slate-950 text-slate-100 overflow-hidden font-sans select-none">
       {/* Top Application Header */}
       <Header
         fires={manifest.fires}
@@ -205,6 +248,8 @@ export const App: React.FC = () => {
         onSelectFire={handleSelectFire}
         activeTab={activeTab}
         onChangeTab={(t) => setActiveTab(t)}
+        activeMode={activeMode}
+        onSelectMode={handleSelectMode}
         onOpenMethodology={() => setIsMethodologyOpen(true)}
         showMetrics={showMetrics}
         onToggleMetrics={() => setShowMetrics((v) => !v)}
@@ -214,88 +259,82 @@ export const App: React.FC = () => {
       {/* Main Body View */}
       <div className="flex-1 relative overflow-hidden">
         {activeTab === 'explorer' && (
-          <div className="w-full h-full flex flex-col lg:flex-row relative overflow-hidden">
-            {/* Left Controls & Scenario Details Panel */}
-            <div className="w-full lg:w-80 lg:min-w-[320px] lg:max-w-[340px] shrink-0 p-3 border-r border-slate-800 bg-slate-950/95 overflow-y-auto space-y-3 z-10 max-h-56 lg:max-h-full">
-              {/* Scenario Summary Card */}
-              <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 space-y-2 select-none shadow-lg">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-mono uppercase text-orange-400 font-semibold flex items-center space-x-1">
-                    <MapPin className="w-3 h-3 text-orange-400" />
-                    <span>State: {selectedFire.state}</span>
+          <div className="relative w-full h-full overflow-hidden">
+            {/* 100% Full-Screen Edge-to-Edge Map */}
+            <MapViewer
+              fireId={selectedFire.id}
+              bounds={fireMeta.bounds}
+              days={fireMeta.days}
+              currentDate={currentDate}
+              currentMetric={currentDayMetric}
+              layerState={layerState}
+              inspectedSample={inspectedSample}
+              onSamplePixel={(s) => setInspectedSample(s)}
+              showMetrics={showMetrics}
+              onToggleMetrics={() => setShowMetrics((v) => !v)}
+            />
+
+            {/* Mode Description Toast (Top Center Pill) */}
+            <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-20 pointer-events-none hidden md:block">
+              <div className="bg-slate-950/80 backdrop-blur-md border border-slate-800/80 rounded-full px-4 py-1.5 shadow-xl text-xs font-mono flex items-center space-x-2 text-slate-300">
+                <Sparkles className="w-3.5 h-3.5 text-orange-400" />
+                {activeMode === 'physics' && (
+                  <span>
+                    <strong>Thermal Physics:</strong> VIIRS Band I4 (3.74 µm MWIR) Planck radiation spikes
                   </span>
-                  <span className="text-[10px] font-mono text-slate-400">
-                    {fireMeta.days.length} Days
+                )}
+                {activeMode === 'detection' && (
+                  <span>
+                    <strong>Perimeter Verification:</strong> True Positive (Green), False Alarm (Amber), Missed (Blue)
                   </span>
-                </div>
-
-                <div>
-                  <h3 className="text-sm font-bold text-white font-mono">{selectedFire.name}</h3>
-                  <div className="flex items-center space-x-1 text-[11px] text-slate-400 mt-0.5">
-                    <Calendar className="w-3 h-3 text-slate-500" />
-                    <span>{selectedFire.start} &rarr; {selectedFire.end}</span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800/80 text-[10px] font-mono">
-                  <div>
-                    <span className="text-slate-500 block">TOTAL SCAR</span>
-                    <span className="text-orange-400 font-bold">{finalBurnedKm2} km²</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block">RESOLUTION</span>
-                    <span className="text-slate-300 font-bold">
-                      {fireMeta.pixel_size_m}m <span className="text-slate-500">({fireMeta.png_size.join('×')})</span>
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Layer Toggles, Threshold Controls & Slide to Compare */}
-              <LayerControls
-                layerState={layerState}
-                onChangeLayerState={handleUpdateLayerState}
-              />
-            </div>
-
-            {/* Center: MapLibre Geospatial Canvas & Floating Timeline */}
-            <div className="flex-1 relative min-w-0 h-[55vh] lg:h-full flex flex-col overflow-hidden">
-              <div className="relative w-full h-full flex-1 min-h-0">
-                <MapViewer
-                  fireId={selectedFire.id}
-                  bounds={fireMeta.bounds}
-                  days={fireMeta.days}
-                  currentDate={currentDate}
-                  currentMetric={currentDayMetric}
-                  layerState={layerState}
-                  inspectedSample={inspectedSample}
-                  onSamplePixel={(s) => setInspectedSample(s)}
-                  showMetrics={showMetrics}
-                  onToggleMetrics={() => setShowMetrics((v) => !v)}
-                />
-
-                {/* Floating Bottom Timeline Scrubber */}
-                <div className="absolute bottom-4 left-4 right-4 max-w-2xl mx-auto z-20 pointer-events-auto">
-                  <TimelinePlayer
-                    days={fireMeta.days}
-                    metrics={fireMetrics.days}
-                    currentDate={currentDate}
-                    onSelectDate={(d) => setCurrentDate(d)}
-                  />
-                </div>
+                )}
+                {activeMode === 'forecast' && (
+                  <span>
+                    <strong>24h Spread Forecast:</strong> Probability surface vs verified next-day expansion
+                  </span>
+                )}
               </div>
             </div>
 
-            {/* Right Telemetry & Inspector Panel */}
-            {showMetrics && (
-              <div className="w-full lg:w-96 lg:min-w-[350px] lg:max-w-[420px] shrink-0 p-3 border-l border-slate-800 bg-slate-950/95 overflow-y-auto space-y-3 z-10 max-h-72 lg:max-h-full">
-                {/* Click / Hover Pixel Inspector */}
+            {/* Floating Inspector Card (Bottom Left) */}
+            {inspectedSample && (
+              <div className="absolute bottom-28 left-4 z-20 max-w-sm pointer-events-auto animate-in fade-in slide-in-from-bottom-2 duration-150">
                 <InspectorCard
                   sample={inspectedSample}
                   onClear={() => setInspectedSample(null)}
                 />
+              </div>
+            )}
 
-                {/* Daily Metrics & Recharts Progression */}
+            {/* Floating Bottom Media & Comparison Dock */}
+            <div className="absolute bottom-5 left-4 right-4 z-20 pointer-events-auto">
+              <TimelinePlayer
+                days={fireMeta.days}
+                metrics={fireMetrics.days}
+                currentDate={currentDate}
+                onSelectDate={(d) => setCurrentDate(d)}
+                predictionOpacity={layerState.predictionOpacity ?? 0.85}
+                onChangePredictionOpacity={(op) => handleUpdateLayerState({ predictionOpacity: op })}
+              />
+            </div>
+
+            {/* Floating Analytics Slide-Over Panel (Right Side) */}
+            {showMetrics && (
+              <div className="absolute top-4 right-4 bottom-24 w-full max-w-md z-30 bg-slate-950/95 backdrop-blur-2xl border border-slate-800/90 rounded-2xl shadow-2xl p-4 overflow-y-auto space-y-4 animate-in slide-in-from-right duration-200 pointer-events-auto">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                  <span className="text-xs font-mono font-bold text-slate-200 uppercase tracking-wider flex items-center space-x-2">
+                    <Flame className="w-4 h-4 text-orange-400" />
+                    <span>Wildfire Telemetry & Analytics</span>
+                  </span>
+                  <button
+                    onClick={() => setShowMetrics(false)}
+                    className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+                    title="Close Analytics Drawer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
                 <MetricsPanel
                   currentMetric={currentDayMetric}
                   metrics={fireMetrics.days}

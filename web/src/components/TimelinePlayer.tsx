@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, SkipBack, SkipForward, Clock, Zap } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Sliders, Zap, Flame } from 'lucide-react';
 import { DayMetric } from '../types/contract';
 
 interface TimelinePlayerProps {
@@ -7,16 +7,20 @@ interface TimelinePlayerProps {
   metrics: DayMetric[];
   currentDate: string;
   onSelectDate: (date: string) => void;
+  predictionOpacity: number;
+  onChangePredictionOpacity: (opacity: number) => void;
 }
 
 export const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
   days,
   metrics,
   currentDate,
-  onSelectDate
+  onSelectDate,
+  predictionOpacity,
+  onChangePredictionOpacity
 }) => {
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
-  const [speed, setSpeed] = useState<number>(1); // 1x, 2x, 4x
+  const [speed, setSpeed] = useState<number>(1);
   const timerRef = useRef<number | null>(null);
 
   const currentIndex = Math.max(0, days.indexOf(currentDate));
@@ -25,7 +29,6 @@ export const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
   const currentIndexRef = useRef(currentIndex);
   currentIndexRef.current = currentIndex;
 
-  // Auto-play interval
   useEffect(() => {
     if (isPlaying) {
       const delay = Math.max(300, 1500 / speed);
@@ -36,22 +39,17 @@ export const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
     } else {
       if (timerRef.current) clearInterval(timerRef.current);
     }
-
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [isPlaying, speed, days, onSelectDate]);
 
   const handleStepBack = () => {
-    if (currentIndex > 0) {
-      onSelectDate(days[currentIndex - 1]);
-    }
+    if (currentIndex > 0) onSelectDate(days[currentIndex - 1]);
   };
 
   const handleStepForward = () => {
-    if (currentIndex < days.length - 1) {
-      onSelectDate(days[currentIndex + 1]);
-    }
+    if (currentIndex < days.length - 1) onSelectDate(days[currentIndex + 1]);
   };
 
   const toggleSpeed = () => {
@@ -61,117 +59,120 @@ export const TimelinePlayer: React.FC<TimelinePlayerProps> = ({
   };
 
   return (
-    <div className="bg-slate-900/95 backdrop-blur border border-slate-800 rounded-xl px-4 py-3 shadow-xl">
-      {/* Top telemetry row */}
-      <div className="flex items-center justify-between mb-2 text-xs">
-        <div className="flex items-center space-x-2">
-          <Clock className="w-4 h-4 text-orange-400" />
-          <span className="font-mono text-slate-300 font-medium">
-            Observation Day <strong className="text-white">{currentIndex + 1}</strong> of {days.length}
-          </span>
-          <span className="font-mono text-orange-400 bg-orange-950/60 border border-orange-800/40 px-2 py-0.5 rounded text-[11px]">
+    <div className="bg-slate-950/90 backdrop-blur-xl border border-slate-800/90 rounded-2xl px-4 py-3 shadow-2xl space-y-2.5 max-w-2xl mx-auto select-none">
+      {/* Row 1: Time Player Scrubber */}
+      <div className="flex items-center space-x-3">
+        {/* Playback Controls */}
+        <div className="flex items-center space-x-1">
+          <button
+            onClick={handleStepBack}
+            disabled={currentIndex === 0}
+            className="p-1 rounded-full text-slate-400 hover:text-white disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-800 transition-colors"
+            title="Previous Day"
+          >
+            <SkipBack className="w-3.5 h-3.5" />
+          </button>
+
+          <button
+            onClick={() => setIsPlaying(!isPlaying)}
+            className="w-7 h-7 rounded-full bg-orange-600 hover:bg-orange-500 text-white flex items-center justify-center shadow-md shadow-orange-600/30 transition-transform active:scale-95"
+            title={isPlaying ? 'Pause' : 'Play Timeline'}
+          >
+            {isPlaying ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current ml-0.5" />}
+          </button>
+
+          <button
+            onClick={handleStepForward}
+            disabled={currentIndex === days.length - 1}
+            className="p-1 rounded-full text-slate-400 hover:text-white disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-800 transition-colors"
+            title="Next Day"
+          >
+            <SkipForward className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {/* Date & Day Badge */}
+        <div className="flex items-center space-x-1.5 font-mono text-xs shrink-0">
+          <span className="text-white font-bold">Day {currentIndex + 1}</span>
+          <span className="text-slate-500">/ {days.length}</span>
+          <span className="text-orange-400 bg-orange-950/70 border border-orange-800/50 px-2 py-0.5 rounded-full text-[10px] font-semibold ml-1">
             {currentDate}
           </span>
         </div>
 
-        {currentMetric && (
-          <div className="flex items-center space-x-4 font-mono text-[11px] text-slate-400">
-            <div>
-              Burned Area: <span className="text-orange-400 font-semibold">{currentMetric.burned_km2} km²</span>
-            </div>
-            <div>
-              24h Growth: <span className="text-amber-400 font-semibold">+{currentMetric.new_km2} km²</span>
-            </div>
-            <div className="hidden sm:block">
-              AF F1: <span className="text-cyan-400 font-semibold">{Math.round(currentMetric.f1_af * 100)}%</span>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Main Scrubber Slider */}
-      <div className="relative mb-2.5">
-        <input
-          type="range"
-          min={0}
-          max={days.length - 1}
-          value={currentIndex}
-          onChange={(e) => onSelectDate(days[parseInt(e.target.value)])}
-          className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-orange-500 focus:outline-none"
-        />
-
-        {/* Milestone Tick Marks */}
-        <div className="flex justify-between items-center px-1 mt-1">
-          {days.map((d, i) => (
-            <button
-              key={d}
-              onClick={() => onSelectDate(d)}
-              className={`w-2 h-2 rounded-full transition-transform ${
-                i === currentIndex
-                  ? 'bg-orange-500 ring-2 ring-orange-400/50 scale-150'
-                  : i < currentIndex
-                  ? 'bg-slate-600 hover:bg-slate-500'
-                  : 'bg-slate-700 hover:bg-slate-600'
-              }`}
-              title={`Day ${i + 1}: ${d}`}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* Playback Controls Row */}
-      <div className="flex items-center justify-between pt-1 border-t border-slate-800/60">
-        <div className="flex items-center space-x-2">
-          {/* Step Back */}
-          <button
-            onClick={handleStepBack}
-            disabled={currentIndex === 0}
-            className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-colors"
-            title="Previous Day"
-          >
-            <SkipBack className="w-4 h-4" />
-          </button>
-
-          {/* Play / Pause */}
-          <button
-            onClick={() => setIsPlaying(!isPlaying)}
-            className="flex items-center space-x-1.5 px-3 py-1 rounded-md bg-orange-600 hover:bg-orange-500 text-white font-medium text-xs shadow-md shadow-orange-600/30 transition-all"
-          >
-            {isPlaying ? (
-              <>
-                <Pause className="w-3.5 h-3.5 fill-current" />
-                <span>Pause</span>
-              </>
-            ) : (
-              <>
-                <Play className="w-3.5 h-3.5 fill-current" />
-                <span>Play Animation</span>
-              </>
-            )}
-          </button>
-
-          {/* Step Forward */}
-          <button
-            onClick={handleStepForward}
-            disabled={currentIndex === days.length - 1}
-            className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-colors"
-            title="Next Day"
-          >
-            <SkipForward className="w-4 h-4" />
-          </button>
+        {/* Timeline Slider */}
+        <div className="flex-1 relative">
+          <input
+            type="range"
+            min={0}
+            max={days.length - 1}
+            value={currentIndex}
+            onChange={(e) => onSelectDate(days[parseInt(e.target.value)])}
+            className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-orange-500 focus:outline-none"
+          />
         </div>
 
-        {/* Speed button */}
-        <div className="flex items-center space-x-2">
+        {/* Telemetry pill & Speed */}
+        <div className="flex items-center space-x-2 shrink-0 font-mono text-[11px]">
+          {currentMetric && (
+            <span className="hidden sm:flex items-center space-x-1 text-slate-300 bg-slate-900 border border-slate-800 px-2 py-0.5 rounded-full">
+              <Flame className="w-3 h-3 text-orange-400" />
+              <span>{currentMetric.burned_km2} km²</span>
+            </span>
+          )}
+
           <button
             onClick={toggleSpeed}
-            className="flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-mono bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
+            className="text-[10px] text-slate-400 hover:text-white px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 hover:border-slate-700 transition-colors flex items-center space-x-0.5"
             title="Playback Speed"
           >
-            <Zap className="w-3 h-3 text-amber-400" />
-            <span>{speed}x Speed</span>
+            <Zap className="w-2.5 h-2.5 text-amber-400" />
+            <span>{speed}x</span>
           </button>
         </div>
+      </div>
+
+      {/* Row 2: Slide to Compare (Raw Satellite vs AI Model) */}
+      <div className="flex items-center space-x-3 pt-2 border-t border-slate-800/80 text-[10px] font-mono text-slate-400">
+        <span className="flex items-center space-x-1 shrink-0 text-slate-300 font-semibold uppercase text-[9px]">
+          <Sliders className="w-3 h-3 text-orange-400" />
+          <span>Compare:</span>
+        </span>
+
+        <button
+          onClick={() => onChangePredictionOpacity(0)}
+          className={`px-1.5 py-0.5 rounded transition-colors ${
+            predictionOpacity === 0 ? 'bg-slate-800 text-orange-400 font-bold' : 'hover:text-white'
+          }`}
+        >
+          Raw Satellite
+        </button>
+
+        <div className="flex-1 relative flex items-center">
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            value={predictionOpacity}
+            onChange={(e) => onChangePredictionOpacity(parseFloat(e.target.value))}
+            className="w-full h-1 bg-slate-800 rounded appearance-none cursor-pointer accent-orange-500"
+            title="Slide left for satellite, right for AI prediction"
+          />
+        </div>
+
+        <button
+          onClick={() => onChangePredictionOpacity(1)}
+          className={`px-1.5 py-0.5 rounded transition-colors ${
+            predictionOpacity === 1 ? 'bg-slate-800 text-orange-400 font-bold' : 'hover:text-white'
+          }`}
+        >
+          AI Overlay
+        </button>
+
+        <span className="text-slate-500 font-mono text-[9px] shrink-0">
+          {Math.round(predictionOpacity * 100)}%
+        </span>
       </div>
     </div>
   );
