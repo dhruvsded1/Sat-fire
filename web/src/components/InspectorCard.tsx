@@ -136,6 +136,14 @@ export const InspectorCard: React.FC<InspectorCardProps> = ({ sample, onClear })
           </span>
         </div>
       </div>
+
+      {/* Academic Physics Footnote */}
+      <div className="bg-slate-950/80 p-2 rounded-lg border border-slate-800/80 text-[10px] text-slate-400 font-mono leading-tight space-y-1">
+        <span className="text-orange-400 font-semibold block uppercase text-[9px]">Radiative Transfer Physics</span>
+        <p>
+          Wien&apos;s Law (λ_peak · T ≈ 2898 µm·K): Flaming wildfire combustion (700–1200 K) peaks in the MWIR spectrum (2.4–4.1 µm), directly measured by VIIRS Band I4 (3.74 µm).
+        </p>
+      </div>
     </div>
   );
 };

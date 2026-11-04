@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Satellite, Flame, ShieldAlert, Cpu, BarChart2, BookOpen, CheckCircle2 } from 'lucide-react';
+import { X, Satellite, Flame, ShieldAlert, Cpu, BarChart2, BookOpen, CheckCircle2, Sparkles } from 'lucide-react';
 
 interface MethodologyModalProps {
   isOpen: boolean;
@@ -132,11 +132,17 @@ export const MethodologyModal: React.FC<MethodologyModalProps> = ({ isOpen, onCl
 
               <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 space-y-1">
                 <h4 className="text-xs font-mono font-bold text-white">
-                  B. Multi-Task FireLens U-Net
+                  B. Multi-Task FireLens U-Net &amp; Loss Formulation
                 </h4>
                 <p className="text-xs text-slate-400">
-                  Lightweight 2-day temporal context U-Net with multi-spectral satellite embeddings (I1–I5, M11, Day + Night),
-                  trained with Dice + BCE loss to resolve active fire perimeters (F1: 0.801) and cumulative burned scars (F1: 0.742).
+                  Lightweight 2-day temporal context U-Net with multi-spectral satellite embeddings (I1–I5, M11, Day + Night).
+                  To counteract severe spatial class imbalance (&gt;98.5% background), training optimizes a combined weighted Binary Cross-Entropy and Soft-Dice objective:
+                </p>
+                <div className="bg-slate-900 p-2 rounded border border-slate-800 font-mono text-cyan-300 text-[11px] my-1">
+                  L_total = L_BCE(y, ŷ; w_pos = 10.0) + λ · L_Dice(y, ŷ)
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  The positive weight <code className="text-orange-400 font-mono">w_pos = 10.0</code> heavily penalizes missed fire fronts without causing ballooning false alarms.
                 </p>
               </div>
 
@@ -155,7 +161,7 @@ export const MethodologyModal: React.FC<MethodologyModalProps> = ({ isOpen, onCl
           <div className="space-y-2">
             <h3 className="text-sm font-bold text-white font-mono uppercase text-orange-400 flex items-center space-x-1.5">
               <BarChart2 className="w-4 h-4" />
-              <span>4. Evaluation Metrics</span>
+              <span>4. Evaluation Metrics &amp; Class Imbalance Rationale</span>
             </h3>
             <div className="grid grid-cols-2 gap-2 text-xs font-mono bg-slate-950 p-3 rounded-lg border border-slate-800">
               <div>
@@ -165,10 +171,43 @@ export const MethodologyModal: React.FC<MethodologyModalProps> = ({ isOpen, onCl
                 <strong>Recall:</strong> TP / (TP + FN)
               </div>
               <div>
-                <strong>F1-Score:</strong> 2 · (P · R) / (P + R)
+                <strong>F1-Score (Dice):</strong> 2 · (P · R) / (P + R)
               </div>
               <div>
                 <strong>IoU (Jaccard):</strong> TP / (TP + FP + FN)
+              </div>
+            </div>
+            <p className="text-xs text-slate-400">
+              <strong>Why Macro-Dice and IoU instead of Accuracy?</strong> In satellite remote sensing of active wildfires, unburned land accounts for over 98.5% of all pixels. A naive classifier predicting all zeros would attain 98.5% accuracy while completely failing to detect burning firefronts. Macro-Dice and IoU strictly isolate foreground overlap.
+            </p>
+          </div>
+
+          {/* Section 5: Professor Presentation Walkthrough */}
+          <div className="bg-gradient-to-br from-orange-950/40 via-slate-950 to-slate-900 border border-orange-700/60 rounded-xl p-4 space-y-3">
+            <div className="flex items-center space-x-2 text-orange-300 font-semibold font-mono text-xs uppercase">
+              <Sparkles className="w-4 h-4 text-amber-400" />
+              <span>3-Minute Professor Presentation Script</span>
+            </div>
+            <div className="space-y-2 text-xs text-slate-300 leading-relaxed">
+              <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800 space-y-1">
+                <span className="text-amber-400 font-mono font-bold block">Minute 1: The Physics &amp; Problem (Click &ldquo;🛰️ Physics&rdquo; Preset)</span>
+                <p className="text-slate-400">
+                  &ldquo;We address automated wildfire perimeter segmentation and 24-hour spread forecasting using VIIRS 375m multispectral satellite imagery from the TS-SatFire benchmark. According to Wien&apos;s displacement law, flaming combustion peaks at 3.74 µm (MWIR Band I4), enabling us to detect flaming fronts through atmospheric haze.&rdquo;
+                </p>
+              </div>
+
+              <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800 space-y-1">
+                <span className="text-emerald-400 font-mono font-bold block">Minute 2: Detection &amp; Confusion Breakdown (Click &ldquo;🎯 Verify&rdquo; Preset)</span>
+                <p className="text-slate-400">
+                  &ldquo;Here we overlay the SWIR false-color composite against our model&apos;s spatial confusion matrix. Green represents True Positives, Amber indicates False Alarms along perimeter edges, and Blue marks Missed Fronts. Because unburned terrain constitutes 98.5% of pixels, we evaluate strictly on Macro-Dice (F1) and IoU rather than misleading accuracy.&rdquo;
+                </p>
+              </div>
+
+              <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800 space-y-1">
+                <span className="text-orange-400 font-mono font-bold block">Minute 3: 24h Forward Spread Forecasting (Click &ldquo;🔮 Forecast&rdquo; Preset)</span>
+                <p className="text-slate-400">
+                  &ldquo;By coupling multi-temporal thermal sequences with wind vector forcings, our model outputs a 24-hour forward spread probability field. Enabling the actual next-day overlay verifies that high-probability corridors accurately align with the empirical next-day fire perimeter.&rdquo;
+                </p>
               </div>
             </div>
           </div>

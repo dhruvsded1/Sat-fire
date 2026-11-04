@@ -1,5 +1,5 @@
 import React from 'react';
-import { Flame, Layers, BarChart3, HelpCircle, Cpu, Loader2 } from 'lucide-react';
+import { Flame, Layers, BarChart3, BookOpen, Cpu, Loader2 } from 'lucide-react';
 import { ManifestFire } from '../types/contract';
 
 interface HeaderProps {
@@ -133,11 +133,11 @@ export const Header: React.FC<HeaderProps> = ({
 
         <button
           onClick={onOpenMethodology}
-          className="flex items-center space-x-1.5 px-2.5 py-1 text-xs text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded transition-colors"
-          title="Methodology, Sensors & Algorithm Formulation"
+          className="flex items-center space-x-1.5 px-3 py-1 text-xs text-orange-200 hover:text-white bg-orange-950/50 hover:bg-orange-900/70 border border-orange-800/80 rounded transition-colors shadow-sm"
+          title="Academic Methodology, Sensor Physics, Loss Function & 3-Min Presentation Script"
         >
-          <HelpCircle className="w-3.5 h-3.5 text-orange-400" />
-          <span className="hidden lg:inline">Methodology &amp; Guide</span>
+          <BookOpen className="w-3.5 h-3.5 text-orange-400" />
+          <span className="hidden sm:inline font-mono font-medium">Academic Briefing</span>
         </button>
       </div>
     </header>

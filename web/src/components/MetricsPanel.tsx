@@ -135,6 +135,14 @@ export const MetricsPanel: React.FC<MetricsPanelProps> = ({
         </div>
       </div>
 
+      {/* Metric Selection Callout */}
+      <div className="bg-slate-950/80 p-2.5 rounded-lg border border-slate-800/80 text-[10px] text-slate-400 font-mono leading-relaxed space-y-1">
+        <span className="text-cyan-400 font-semibold block uppercase text-[9px]">Evaluation Metric Rationale</span>
+        <p>
+          Macro-Dice (F1) and IoU are used because unburned background exceeds 98.5% of the spatial domain. Standard pixel accuracy is artificially inflated (&gt;98%) and scientifically invalid for sparse wildfire perimeter detection.
+        </p>
+      </div>
+
       {/* Burned Area Growth Progression Chart */}
       <div className="space-y-1">
         <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">

@@ -3,7 +3,8 @@ import {
   Layers,
   Thermometer,
   TrendingUp,
-  Sliders
+  Sliders,
+  Sparkles
 } from 'lucide-react';
 import { LayerState } from '../types/contract';
 
@@ -24,6 +25,78 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
         <h2 className="text-xs font-mono font-semibold uppercase text-slate-200">
           Geospatial Layers &amp; Controls
         </h2>
+      </div>
+
+      {/* 1-Click Presentation Presets (For Professor Demo) */}
+      <div className="bg-gradient-to-r from-orange-950/40 via-slate-950 to-slate-900 border border-orange-800/50 rounded-xl p-2.5 space-y-2 shadow-lg">
+        <div className="flex items-center justify-between text-[10px] font-mono uppercase text-orange-400 font-bold">
+          <span className="flex items-center space-x-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+            <span>1-Click Demo Presets</span>
+          </span>
+          <span className="text-[9px] text-slate-500 font-normal">Presentation Mode</span>
+        </div>
+
+        <div className="grid grid-cols-3 gap-1.5">
+          <button
+            onClick={() =>
+              onChangeLayerState({
+                showComposite: true,
+                compositeOpacity: 0.9,
+                showThermal: false,
+                activeFireMode: 'confusion',
+                burnedAreaMode: 'none',
+                showNextDay: false,
+                predictionOpacity: 0.85
+              })
+            }
+            className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-900 hover:bg-slate-800/90 border border-slate-700/80 hover:border-emerald-500 text-slate-200 transition-all text-center group shadow-md"
+            title="Algorithm Verification: SWIR False-Color + Confusion Map (True Positive Green, False Alarm Amber, Missed Blue)"
+          >
+            <span className="text-emerald-400 font-bold text-[11px] group-hover:scale-105 transition-transform">🎯 Verify</span>
+            <span className="text-[9px] font-mono text-slate-400 mt-0.5">Confusion</span>
+          </button>
+
+          <button
+            onClick={() =>
+              onChangeLayerState({
+                showComposite: true,
+                compositeOpacity: 0.85,
+                showThermal: false,
+                activeFireMode: 'none',
+                burnedAreaMode: 'none',
+                showNextDay: true,
+                nextDayThreshold: 0.35,
+                showActualNextOverlay: true,
+                predictionOpacity: 0.9
+              })
+            }
+            className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-900 hover:bg-slate-800/90 border border-slate-700/80 hover:border-orange-500 text-slate-200 transition-all text-center group shadow-md"
+            title="24h Spread Forecast: Next-Day Probability Field + Actual Verification Perimeter"
+          >
+            <span className="text-orange-400 font-bold text-[11px] group-hover:scale-105 transition-transform">🔮 Forecast</span>
+            <span className="text-[9px] font-mono text-slate-400 mt-0.5">24h Spread</span>
+          </button>
+
+          <button
+            onClick={() =>
+              onChangeLayerState({
+                showComposite: false,
+                showThermal: true,
+                thermalOpacity: 0.95,
+                activeFireMode: 'pred',
+                burnedAreaMode: 'none',
+                showNextDay: false,
+                predictionOpacity: 0.8
+              })
+            }
+            className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-900 hover:bg-slate-800/90 border border-slate-700/80 hover:border-amber-500 text-slate-200 transition-all text-center group shadow-md"
+            title="Thermal Radiance: Isolates VIIRS Band I4 (3.74 um MWIR) Planck Radiance Spikes"
+          >
+            <span className="text-amber-400 font-bold text-[11px] group-hover:scale-105 transition-transform">🛰️ Physics</span>
+            <span className="text-[9px] font-mono text-slate-400 mt-0.5">Thermal IR</span>
+          </button>
+        </div>
       </div>
 
       {/* 1. Slide to Compare: Raw Satellite vs AI Prediction */}
