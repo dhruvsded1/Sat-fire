@@ -28,7 +28,7 @@ import {
   fetchImportance
 } from './services/dataService';
 import { pixelSampler } from './services/pixelSampler';
-import { Flame, MapPin, Calendar } from 'lucide-react';
+import { Flame, MapPin, Calendar, AlertTriangle, RefreshCw } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [manifest, setManifest] = useState<Manifest | null>(null);
@@ -62,6 +62,7 @@ export const App: React.FC = () => {
   });
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [initError, setInitError] = useState<string | null>(null);
 
   // Dynamically re-sample active inspected coordinates when timeline date changes
   useEffect(() => {
@@ -111,8 +112,9 @@ export const App: React.FC = () => {
           setFireMetrics(metrics);
           setCurrentDate(targetDate);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to initialize FireLens data:', err);
+        setInitError(err.message || 'Failed to initialize dataset telemetry');
       } finally {
         setIsLoading(false);
       }
@@ -149,6 +151,29 @@ export const App: React.FC = () => {
   const handleUpdateLayerState = (newState: Partial<LayerState>) => {
     setLayerState((prev) => ({ ...prev, ...newState }));
   };
+
+  if (initError) {
+    return (
+      <div className="w-screen h-screen flex flex-col items-center justify-center bg-slate-950 text-slate-300 font-mono p-4 space-y-4">
+        <div className="w-12 h-12 rounded-xl bg-rose-600 flex items-center justify-center shadow-lg shadow-rose-500/30">
+          <AlertTriangle className="w-7 h-7 text-white" />
+        </div>
+        <div className="text-sm font-semibold tracking-wider text-rose-400 uppercase">
+          Dataset Initialization Failed
+        </div>
+        <div className="text-xs text-slate-400 max-w-lg text-center bg-slate-900 border border-slate-800 p-3.5 rounded-lg leading-relaxed">
+          {initError}
+        </div>
+        <button
+          onClick={() => window.location.reload()}
+          className="flex items-center space-x-2 px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-xs font-semibold shadow-lg shadow-orange-600/30 transition-all cursor-pointer"
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+          <span>Retry Connection</span>
+        </button>
+      </div>
+    );
+  }
 
   if (isLoading || !manifest || !selectedFire || !fireMeta || !fireMetrics) {
     return (

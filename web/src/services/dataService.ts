@@ -10,24 +10,36 @@ import {
 
 const BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, '');
 
+async function fetchJson<T>(url: string, description: string): Promise<T> {
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Failed to load ${description} (${res.status} ${res.statusText}) from ${url}`);
+  }
+  const text = await res.text();
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(
+      `Received invalid response for ${description} from ${url}. Server returned HTML instead of JSON. Ensure /public/data is included in the build output.`
+    );
+  }
+}
+
 export async function fetchManifest(): Promise<Manifest> {
-  const res = await fetch(`${BASE_URL}/data/manifest.json`);
-  if (!res.ok) throw new Error(`Failed to load manifest.json: ${res.statusText}`);
-  return res.json();
+  return fetchJson<Manifest>(`${BASE_URL}/data/manifest.json`, 'manifest.json');
 }
 
 export async function fetchFireMeta(fireId: string): Promise<FireMeta> {
-  const res = await fetch(`${BASE_URL}/data/fires/${fireId}/meta.json`);
-  if (!res.ok) throw new Error(`Failed to load meta.json for ${fireId}`);
-  return res.json();
+  return fetchJson<FireMeta>(`${BASE_URL}/data/fires/${fireId}/meta.json`, `meta.json for ${fireId}`);
 }
 
 export async function fetchFireMetrics(
   fireId: string
 ): Promise<{ days: DayMetric[]; summary: FireMetricsSummary }> {
-  const res = await fetch(`${BASE_URL}/data/fires/${fireId}/metrics.json`);
-  if (!res.ok) throw new Error(`Failed to load metrics.json for ${fireId}`);
-  const raw: RawFireMetrics = await res.json();
+  const raw = await fetchJson<RawFireMetrics>(
+    `${BASE_URL}/data/fires/${fireId}/metrics.json`,
+    `metrics.json for ${fireId}`
+  );
 
   // Convert raw dictionary to sorted DayMetric array
   const dateKeys = Object.keys(raw).sort();
@@ -76,15 +88,11 @@ export async function fetchFireMetrics(
 }
 
 export async function fetchModels(): Promise<ModelsContract> {
-  const res = await fetch(`${BASE_URL}/data/models.json`);
-  if (!res.ok) throw new Error(`Failed to load models.json`);
-  return res.json();
+  return fetchJson<ModelsContract>(`${BASE_URL}/data/models.json`, 'models.json');
 }
 
 export async function fetchImportance(): Promise<ImportanceData> {
-  const res = await fetch(`${BASE_URL}/data/importance.json`);
-  if (!res.ok) throw new Error(`Failed to load importance.json`);
-  return res.json();
+  return fetchJson<ImportanceData>(`${BASE_URL}/data/importance.json`, 'importance.json');
 }
 
 export function getDayRasterUrls(fireId: string, date: string) {

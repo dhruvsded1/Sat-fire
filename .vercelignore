@@ -1,17 +1,22 @@
 # Vercel Deployment Ignore Rules
-# Exclude raw satellite data and pipeline artifacts (1.5GB+) to keep deployments fast and within limits
-
-data/
-pipeline/
-contract/
+# Exclude raw satellite data and pipeline artifacts (1.5GB+) at the repository root
+/data/
+/pipeline/
+/contract/
 .vscode/
 .pytest_cache/
 __pycache__/
 *.py[cod]
-*.tif
-*.tiff
 *.pt
 *.tar
 *.zip
 node_modules/
 web/node_modules/
+
+# Ensure static wildfire assets are NEVER ignored
+!public/data/**
+!public/data
+!web/public/data/**
+!web/public/data
+!web/dist/data/**
+!web/dist/data
