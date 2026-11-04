@@ -276,21 +276,21 @@ export const App: React.FC = () => {
 
             {/* Mode Description Toast (Top Center Pill) */}
             <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-20 pointer-events-none hidden md:block">
-              <div className="bg-slate-950/80 backdrop-blur-md border border-slate-800/80 rounded-full px-4 py-1.5 shadow-xl text-xs font-mono flex items-center space-x-2 text-slate-300">
-                <Sparkles className="w-3.5 h-3.5 text-orange-400" />
+              <div className="bg-slate-950/85 backdrop-blur-xl border border-white/[0.12] rounded-full px-4 py-1.5 shadow-2xl text-xs font-mono flex items-center space-x-2 text-slate-200 ring-1 ring-black/40">
+                <Sparkles className="w-3.5 h-3.5 text-orange-400 shrink-0" />
                 {activeMode === 'physics' && (
                   <span>
-                    <strong>Thermal Physics:</strong> VIIRS Band I4 (3.74 µm MWIR) Planck radiation spikes
+                    <strong className="text-amber-400">Radiative Physics:</strong> VIIRS Band I4 (3.74 µm MWIR) Planck radiation spikes
                   </span>
                 )}
                 {activeMode === 'detection' && (
                   <span>
-                    <strong>Perimeter Verification:</strong> True Positive (Green), False Alarm (Amber), Missed (Blue)
+                    <strong className="text-emerald-400">Model Verification:</strong> True Positive (Green), False Alarm (Amber), Missed (Blue)
                   </span>
                 )}
                 {activeMode === 'forecast' && (
                   <span>
-                    <strong>24h Spread Forecast:</strong> Probability surface vs verified next-day expansion
+                    <strong className="text-orange-400">24h Spread Forecast:</strong> Probability surface vs verified actual expansion (t+1)
                   </span>
                 )}
               </div>
@@ -320,15 +320,15 @@ export const App: React.FC = () => {
 
             {/* Floating Analytics Slide-Over Panel (Right Side) */}
             {showMetrics && (
-              <div className="absolute top-4 right-4 bottom-24 w-full max-w-md z-30 bg-slate-950/95 backdrop-blur-2xl border border-slate-800/90 rounded-2xl shadow-2xl p-4 overflow-y-auto space-y-4 animate-in slide-in-from-right duration-200 pointer-events-auto">
-                <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-                  <span className="text-xs font-mono font-bold text-slate-200 uppercase tracking-wider flex items-center space-x-2">
+              <div className="absolute top-4 right-4 bottom-24 w-full max-w-md z-30 bg-slate-950/90 backdrop-blur-2xl border border-white/[0.12] rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.8)] p-4 overflow-y-auto space-y-4 animate-in slide-in-from-right duration-200 pointer-events-auto ring-1 ring-black/40">
+                <div className="flex items-center justify-between pb-2 border-b border-white/[0.08]">
+                  <span className="text-xs font-mono font-bold text-white uppercase tracking-wider flex items-center space-x-2">
                     <Flame className="w-4 h-4 text-orange-400" />
-                    <span>Wildfire Telemetry & Analytics</span>
+                    <span>Observation Telemetry & Analytics</span>
                   </span>
                   <button
                     onClick={() => setShowMetrics(false)}
-                    className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+                    className="text-slate-400 hover:text-white p-1 rounded-full hover:bg-white/10 transition-colors"
                     title="Close Analytics Drawer"
                   >
                     <X className="w-4 h-4" />

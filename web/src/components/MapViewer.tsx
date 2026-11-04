@@ -380,7 +380,8 @@ export const MapViewer: React.FC<MapViewerProps> = ({
           source: sourceId,
           paint: {
             'raster-opacity': opacity,
-            'raster-fade-duration': 0
+            'raster-fade-duration': 0,
+            'raster-resampling': layerId.includes('composite') || layerId.includes('thermal') ? 'linear' : 'nearest'
           }
         });
       } else {
@@ -480,29 +481,29 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
       {/* Top Left Satellite Status HUD */}
       {currentMetric && (
-        <div className="absolute top-4 left-4 z-10 flex items-center space-x-3 bg-slate-900/90 backdrop-blur border border-slate-800 rounded-lg px-3 py-1.5 shadow-xl select-none">
-          <div className="flex items-center space-x-1.5 border-r border-slate-800 pr-3">
+        <div className="absolute top-4 left-4 z-10 flex items-center space-x-3 bg-slate-950/85 backdrop-blur-xl border border-white/[0.1] rounded-2xl px-4 py-2 shadow-2xl select-none ring-1 ring-black/40">
+          <div className="flex items-center space-x-2 border-r border-white/10 pr-3">
             <Satellite className="w-4 h-4 text-orange-400" />
             <div className="text-[11px] font-mono leading-tight">
-              <span className="text-slate-400 block text-[9px]">SENSOR</span>
-              <span className="text-white font-semibold">VIIRS 375m</span>
+              <span className="text-slate-400 block text-[9px] font-medium uppercase tracking-wider">SENSOR</span>
+              <span className="text-white font-bold">VIIRS 375m</span>
             </div>
           </div>
 
-          <div className="flex items-center space-x-1.5">
+          <div className="flex items-center space-x-2">
             <Thermometer className="w-4 h-4 text-amber-400" />
             <div className="text-[11px] font-mono leading-tight">
-              <span className="text-slate-400 block text-[9px]">24H EXPANSION</span>
-              <span className="text-white font-semibold">+{currentMetric.new_km2} km²</span>
+              <span className="text-slate-400 block text-[9px] font-medium uppercase tracking-wider">24H GROWTH</span>
+              <span className="text-amber-400 font-bold">+{currentMetric.new_km2} km²</span>
             </div>
           </div>
 
           {layerState.showActualNextOverlay && (
-            <div className="flex items-center space-x-1.5 border-l border-slate-800 pl-3">
+            <div className="flex items-center space-x-2 border-l border-white/10 pl-3">
               <Calendar className="w-4 h-4 text-emerald-400" />
               <div className="text-[11px] font-mono leading-tight">
-                <span className="text-slate-400 block text-[9px]">NEXT VERIFICATION</span>
-                <span className="text-emerald-400 font-semibold">{nextDate || 'Final Observation'}</span>
+                <span className="text-slate-400 block text-[9px] font-medium uppercase tracking-wider">VERIFICATION</span>
+                <span className="text-emerald-400 font-bold">{nextDate || 'Final Observation'}</span>
               </div>
             </div>
           )}
@@ -510,64 +511,45 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       )}
 
       {/* Top Right Quick Map Controls */}
-      <div className="absolute top-4 right-4 z-10 flex items-center space-x-1.5 bg-slate-900/90 backdrop-blur border border-slate-800 rounded-lg p-1 shadow-xl">
+      <div className="absolute top-4 right-4 z-10 flex items-center space-x-1.5 bg-slate-950/85 backdrop-blur-xl border border-white/[0.1] rounded-2xl p-1.5 shadow-2xl ring-1 ring-black/40">
         <button
           onClick={() => setBasemap((b) => (b === 'dark' ? 'satellite' : 'dark'))}
-          className="px-2 py-1 rounded hover:bg-slate-800 text-slate-300 hover:text-white transition-colors flex items-center space-x-1.5 text-[11px] font-mono border border-slate-700/60"
+          className="px-3 py-1 rounded-xl hover:bg-white/10 text-slate-200 hover:text-white transition-all flex items-center space-x-1.5 text-xs font-mono border border-white/5"
           title="Toggle Basemap: Dark Cartography vs Real Topographic Satellite Imagery"
         >
           <Globe className="w-3.5 h-3.5 text-cyan-400" />
-          <span className="capitalize">{basemap === 'dark' ? 'Dark Map' : 'Satellite'}</span>
+          <span className="capitalize font-semibold">{basemap === 'dark' ? 'Dark Map' : 'Satellite'}</span>
         </button>
 
         <button
           onClick={handleResetBounds}
-          className="p-1.5 rounded hover:bg-slate-800 text-slate-300 hover:text-white transition-colors"
+          className="p-1.5 rounded-xl hover:bg-white/10 text-slate-300 hover:text-white transition-colors"
           title="Reset Camera to Fire Bounds"
         >
-          <RefreshCw className="w-4 h-4" />
+          <RefreshCw className="w-3.5 h-3.5" />
         </button>
-
-        {onToggleMetrics && (
-          <button
-            onClick={onToggleMetrics}
-            className={`p-1.5 rounded text-xs flex items-center space-x-1.5 transition-colors ${
-              showMetrics
-                ? 'bg-orange-600/80 text-white shadow-sm'
-                : 'hover:bg-slate-800 text-slate-300 hover:text-white'
-            }`}
-            title={showMetrics ? 'Collapse Metrics Panel' : 'Expand Metrics Panel'}
-          >
-            <BarChart3 className="w-4 h-4" />
-            <span className="text-[11px] font-mono hidden sm:inline">
-              {showMetrics ? 'Hide Metrics' : 'Show Metrics'}
-            </span>
-          </button>
-        )}
       </div>
 
       {/* Map Legend (Positioned above timeline player) */}
-      <div className="absolute bottom-28 left-4 z-10 bg-slate-900/85 backdrop-blur border border-slate-800 rounded-lg px-3 py-1.5 text-[10px] font-mono text-slate-400 flex items-center space-x-4 shadow-lg select-none hidden sm:flex">
+      <div className="absolute bottom-28 left-4 z-10 bg-slate-950/85 backdrop-blur-xl border border-white/[0.1] rounded-2xl px-4 py-2 text-[10px] font-mono text-slate-300 flex items-center space-x-4 shadow-2xl select-none hidden sm:flex ring-1 ring-black/40">
         <div className="flex items-center space-x-1.5">
-          <span className="w-2.5 h-2.5 rounded-sm bg-orange-500 border border-orange-400" />
-          <span>Active Front</span>
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]" />
+          <span className="font-medium text-emerald-300">True Positive</span>
         </div>
         <div className="flex items-center space-x-1.5">
-          <span className="w-2.5 h-2.5 rounded-sm bg-red-900 border border-red-700" />
-          <span>Burn Scar</span>
+          <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-[0_0_8px_#f59e0b]" />
+          <span className="font-medium text-amber-300">False Alarm</span>
         </div>
         <div className="flex items-center space-x-1.5">
-          <span className="w-2.5 h-2.5 rounded-sm bg-gradient-to-r from-amber-400 to-orange-600" />
-          <span>Next-Day Spread</span>
+          <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-[0_0_8px_#3b82f6]" />
+          <span className="font-medium text-blue-300">Missed Front</span>
         </div>
-        {layerState.showActualNextOverlay && nextDate && (
-          <div className="flex items-center space-x-1.5 text-emerald-400">
-            <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 border border-emerald-400" />
-            <span>Actual Next Perimeter</span>
-          </div>
-        )}
-        <div className="text-slate-500 border-l border-slate-800 pl-3">
-          Pixel: 375m VIIRS
+        <div className="flex items-center space-x-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-gradient-to-r from-amber-400 to-orange-600 shadow-[0_0_8px_#f97316]" />
+          <span className="font-medium text-orange-400">24h Forecast</span>
+        </div>
+        <div className="text-slate-400 border-l border-white/10 pl-3 font-semibold">
+          375m VIIRS Grid
         </div>
       </div>
     </div>
