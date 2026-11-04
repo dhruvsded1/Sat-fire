@@ -6,7 +6,8 @@ import {
   RefreshCw,
   BarChart3,
   Calendar,
-  Globe
+  Globe,
+  Box
 } from 'lucide-react';
 import { Bounds, LayerState, DayMetric, InspectorSample } from '../types/contract';
 import { getDayRasterUrls } from '../services/dataService';
@@ -78,6 +79,9 @@ const FALLBACK_DARK_STYLE: maplibregl.StyleSpecification = {
   ]
 };
 
+// In-memory processed canvas cache for 60fps instant timeline scrubbing
+const rasterCanvasCache = new Map<string, string>();
+
 export const MapViewer: React.FC<MapViewerProps> = ({
   fireId,
   bounds,
@@ -123,6 +127,10 @@ export const MapViewer: React.FC<MapViewerProps> = ({
   const [processedNextDayUrl, setProcessedNextDayUrl] = useState<string>('');
   // Processed confusion canvas URL
   const [processedConfusionUrl, setProcessedConfusionUrl] = useState<string>('');
+  // Processed transparent thermal radiance canvas URL
+  const [processedThermalUrl, setProcessedThermalUrl] = useState<string>('');
+  // 3D Perspective Tilt state
+  const [is3D, setIs3D] = useState<boolean>(false);
 
   const [west, south, east, north] = bounds;
   const imageCoordinates = useMemo<[[number, number], [number, number], [number, number], [number, number]]>(
@@ -236,121 +244,181 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     }
   }, [inspectedSample]);
 
-  // 3. Pre-process dynamic canvas rasters (Confusion & Next-Day Probability Filter)
+  // 3. Pre-process dynamic canvas rasters (Confusion, Calibrated Forecast & Transparent Thermal Radiance)
   useEffect(() => {
     let cancelled = false;
     pixelSampler.loadDayImages(fireId, currentDate, bounds, [256, 256]);
 
     const urls = getDayRasterUrls(fireId, currentDate);
 
-    // Dynamic next-day thresholded mask image
-    const nextImg = new Image();
-    nextImg.crossOrigin = 'anonymous';
-    nextImg.onload = () => {
-      if (cancelled) return;
-      const w = nextImg.naturalWidth || 512;
-      const h = nextImg.naturalHeight || 512;
-      const c = document.createElement('canvas');
-      c.width = w;
-      c.height = h;
-      const ctx = c.getContext('2d');
-      if (ctx) {
-        ctx.drawImage(nextImg, 0, 0, w, h);
-        const imgData = ctx.getImageData(0, 0, w, h);
-        const d = imgData.data;
-        const thresh = Math.round(layerState.nextDayThreshold * 255);
-
-        for (let i = 0; i < d.length; i += 4) {
-          const prob = d[i];
-          if (prob >= thresh) {
-            const norm = (prob - thresh) / (255 - thresh + 1e-4);
-            // Radiant Glowing Lava (Electric Amber -> Neon Flare Orange)
-            d[i] = 255;
-            d[i + 1] = Math.round(190 - norm * 110);
-            d[i + 2] = 0;
-            d[i + 3] = Math.round(210 + norm * 45); // High opacity, ultra luminous!
-          } else {
-            d[i + 3] = 0;
-          }
-        }
-        ctx.putImageData(imgData, 0, 0);
-        if (!cancelled) setProcessedNextDayUrl(c.toDataURL());
-      }
-    };
-    nextImg.src = urls.predNext;
-
-    // Dynamic confusion matrix mask
-    const afPredImg = new Image();
-    const afGtImg = new Image();
-    let loadedCount = 0;
-    const onBothLoaded = () => {
-      loadedCount++;
-      if (loadedCount === 2) {
+    // Dynamic transparent thermal mask: makes cool ambient desert ground 100% transparent
+    // so the crisp satellite composite remains completely bright and never darkens!
+    const thermalKey = `${fireId}_${currentDate}_thermal`;
+    if (rasterCanvasCache.has(thermalKey)) {
+      setProcessedThermalUrl(rasterCanvasCache.get(thermalKey)!);
+    } else {
+      const thermalImg = new Image();
+      thermalImg.crossOrigin = 'anonymous';
+      thermalImg.onload = () => {
         if (cancelled) return;
-        const w = afPredImg.naturalWidth || 512;
-        const h = afPredImg.naturalHeight || 512;
+        const w = thermalImg.naturalWidth || 512;
+        const h = thermalImg.naturalHeight || 512;
         const c = document.createElement('canvas');
         c.width = w;
         c.height = h;
         const ctx = c.getContext('2d');
         if (ctx) {
-          const cGt = document.createElement('canvas');
-          cGt.width = w;
-          cGt.height = h;
-          const ctxGt = cGt.getContext('2d');
-          if (ctxGt) {
-            ctxGt.drawImage(afGtImg, 0, 0, w, h);
-            const gtData = ctxGt.getImageData(0, 0, w, h).data;
+          ctx.drawImage(thermalImg, 0, 0, w, h);
+          const imgData = ctx.getImageData(0, 0, w, h);
+          const d = imgData.data;
+          for (let i = 0; i < d.length; i += 4) {
+            const r = d[i];
+            // Ambient ground temperature in Arizona daytime is ~310-320K (R <= 135)
+            // Make ambient unburned pixels 100% transparent to keep satellite terrain bright
+            if (r <= 135) {
+              d[i + 3] = 0;
+            } else {
+              // Incandescent thermal radiance anomaly (>330K)
+              const norm = (r - 135) / (255 - 135);
+              d[i + 3] = Math.round(180 + norm * 75);
+            }
+          }
+          ctx.putImageData(imgData, 0, 0);
+          const dataUrl = c.toDataURL();
+          rasterCanvasCache.set(thermalKey, dataUrl);
+          if (!cancelled) setProcessedThermalUrl(dataUrl);
+        }
+      };
+      thermalImg.src = urls.thermal;
+    }
 
-            ctx.drawImage(afPredImg, 0, 0, w, h);
-            const predData = ctx.getImageData(0, 0, w, h);
-            const d = predData.data;
+    // Dynamic calibrated next-day spread probability mask
+    // Background terrain sigmoid bias is ~142 (~0.52 raw). Only active expansion perimeter peaks to 254!
+    const nextKey = `${fireId}_${currentDate}_next_${layerState.nextDayThreshold}`;
+    if (rasterCanvasCache.has(nextKey)) {
+      setProcessedNextDayUrl(rasterCanvasCache.get(nextKey)!);
+    } else {
+      const nextImg = new Image();
+      nextImg.crossOrigin = 'anonymous';
+      nextImg.onload = () => {
+        if (cancelled) return;
+        const w = nextImg.naturalWidth || 512;
+        const h = nextImg.naturalHeight || 512;
+        const c = document.createElement('canvas');
+        c.width = w;
+        c.height = h;
+        const ctx = c.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(nextImg, 0, 0, w, h);
+          const imgData = ctx.getImageData(0, 0, w, h);
+          const d = imgData.data;
+          const BASE_NOISE = 142;
 
-            for (let i = 0; i < d.length; i += 4) {
-              const isPred = d[i + 3] > 40 || d[i] > 80;
-              const isGt = gtData[i + 3] > 40 || gtData[i] > 80;
-
-              if (isPred && isGt) {
-                // Correct (True Positive): Radioactive Neon Green (Max Luminosity!)
-                d[i] = 0;
-                d[i + 1] = 255;
-                d[i + 2] = 100;
-                d[i + 3] = 255;
-              } else if (isPred && !isGt) {
-                // False Alarm (False Positive): Bright High-Voltage Yellow
+          for (let i = 0; i < d.length; i += 4) {
+            const prob = d[i];
+            if (prob > BASE_NOISE) {
+              const norm = (prob - BASE_NOISE) / (255 - BASE_NOISE);
+              if (norm >= layerState.nextDayThreshold) {
+                // Radiant Glowing Magma Flare (Electric Amber -> Neon Flare Orange)
                 d[i] = 255;
-                d[i + 1] = 220;
+                d[i + 1] = Math.round(180 - norm * 100);
                 d[i + 2] = 0;
-                d[i + 3] = 255;
-              } else if (!isPred && isGt) {
-                // Missed (False Negative): Vivid Electric Cyan (Glowing against terrain!)
-                d[i] = 0;
-                d[i + 1] = 220;
-                d[i + 2] = 255;
-                d[i + 3] = 255;
+                d[i + 3] = 255; // 100% luminous opacity
               } else {
                 d[i + 3] = 0;
               }
+            } else {
+              d[i + 3] = 0;
             }
-            ctx.putImageData(predData, 0, 0);
-            if (!cancelled) setProcessedConfusionUrl(c.toDataURL());
+          }
+          ctx.putImageData(imgData, 0, 0);
+          const dataUrl = c.toDataURL();
+          rasterCanvasCache.set(nextKey, dataUrl);
+          if (!cancelled) setProcessedNextDayUrl(dataUrl);
+        }
+      };
+      nextImg.src = urls.predNext;
+    }
+
+    // Dynamic confusion matrix mask
+    const confKey = `${fireId}_${currentDate}_conf`;
+    if (rasterCanvasCache.has(confKey)) {
+      setProcessedConfusionUrl(rasterCanvasCache.get(confKey)!);
+    } else {
+      const afPredImg = new Image();
+      const afGtImg = new Image();
+      let loadedCount = 0;
+      const onBothLoaded = () => {
+        loadedCount++;
+        if (loadedCount === 2) {
+          if (cancelled) return;
+          const w = afPredImg.naturalWidth || 512;
+          const h = afPredImg.naturalHeight || 512;
+          const c = document.createElement('canvas');
+          c.width = w;
+          c.height = h;
+          const ctx = c.getContext('2d');
+          if (ctx) {
+            const cGt = document.createElement('canvas');
+            cGt.width = w;
+            cGt.height = h;
+            const ctxGt = cGt.getContext('2d');
+            if (ctxGt) {
+              ctxGt.drawImage(afGtImg, 0, 0, w, h);
+              const gtData = ctxGt.getImageData(0, 0, w, h).data;
+
+              ctx.drawImage(afPredImg, 0, 0, w, h);
+              const predData = ctx.getImageData(0, 0, w, h);
+              const d = predData.data;
+
+              for (let i = 0; i < d.length; i += 4) {
+                const isPred = d[i + 3] > 40;
+                const isGt = gtData[i + 3] > 40;
+
+                if (isPred && isGt) {
+                  // Correct (True Positive): Radioactive Neon Green
+                  d[i] = 0;
+                  d[i + 1] = 255;
+                  d[i + 2] = 100;
+                  d[i + 3] = 255;
+                } else if (isPred && !isGt) {
+                  // False Alarm (False Positive): Bright High-Voltage Yellow
+                  d[i] = 255;
+                  d[i + 1] = 220;
+                  d[i + 2] = 0;
+                  d[i + 3] = 255;
+                } else if (!isPred && isGt) {
+                  // Missed (False Negative): Vivid Electric Cyan
+                  d[i] = 0;
+                  d[i + 1] = 220;
+                  d[i + 2] = 255;
+                  d[i + 3] = 255;
+                } else {
+                  d[i + 3] = 0;
+                }
+              }
+              ctx.putImageData(predData, 0, 0);
+              const dataUrl = c.toDataURL();
+              rasterCanvasCache.set(confKey, dataUrl);
+              if (!cancelled) setProcessedConfusionUrl(dataUrl);
+            }
           }
         }
-      }
-    };
-    afPredImg.crossOrigin = 'anonymous';
-    afGtImg.crossOrigin = 'anonymous';
-    afPredImg.onload = onBothLoaded;
-    afGtImg.onload = onBothLoaded;
-    afPredImg.src = urls.afPred;
-    afGtImg.src = urls.afGt;
+      };
+      afPredImg.crossOrigin = 'anonymous';
+      afGtImg.crossOrigin = 'anonymous';
+      afPredImg.onload = onBothLoaded;
+      afGtImg.onload = onBothLoaded;
+      afPredImg.src = urls.afPred;
+      afGtImg.src = urls.afGt;
+    }
 
     return () => {
       cancelled = true;
     };
   }, [fireId, currentDate, layerState.nextDayThreshold, bounds]);
 
-  // 4. Update MapLibre Image Layers
+  // 4. Update MapLibre Image Layers with strict stacking order
   useEffect(() => {
     if (!mapLoaded || !mapRef.current) return;
     const map = mapRef.current;
@@ -394,9 +462,9 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     };
 
     // Calculate effective prediction opacity from Slide to Compare
-    const predOpacity = layerState.predictionOpacity ?? 0.85;
+    const predOpacity = layerState.predictionOpacity ?? 1.0;
 
-    // 1. Composite Base
+    // 1. Composite Base (Satellite Imagery)
     updateImageLayer(
       'source-composite',
       'layer-composite',
@@ -405,20 +473,21 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       layerState.compositeOpacity
     );
 
-    // 2. Thermal
+    // 2. Thermal Radiance (with ambient background transparency)
+    const effectiveThermalOpacity = layerState.showThermal ? layerState.thermalOpacity * predOpacity : 0.0;
     updateImageLayer(
       'source-thermal',
       'layer-thermal',
-      urls.thermal,
-      layerState.showThermal,
-      layerState.thermalOpacity
+      processedThermalUrl || urls.thermal,
+      layerState.showThermal && effectiveThermalOpacity > 0.01,
+      effectiveThermalOpacity
     );
 
     // 3. Burned Area Scar (underneath flame front)
     if (layerState.burnedAreaMode === 'gt') {
-      updateImageLayer('source-ba', 'layer-ba', urls.baGt, true, 0.7);
+      updateImageLayer('source-ba', 'layer-ba', urls.baGt, true, 0.7 * predOpacity);
     } else if (layerState.burnedAreaMode === 'pred') {
-      updateImageLayer('source-ba', 'layer-ba', urls.baPred, true, 0.7);
+      updateImageLayer('source-ba', 'layer-ba', urls.baPred, true, 0.7 * predOpacity);
     } else {
       updateImageLayer('source-ba', 'layer-ba', urls.baGt, false, 0.0);
     }
@@ -450,16 +519,61 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     } else {
       updateImageLayer('source-actual-next', 'layer-actual-next', urls.afGt, false, 0.0);
     }
+
+    // Guaranteed Stacking Order: Ensures active fire front & confusion matrix is ALWAYS topmost
+    const STACK_ORDER = [
+      'esri-dark-layer',
+      'esri-imagery-layer',
+      'layer-composite',
+      'layer-thermal',
+      'layer-ba',
+      'layer-next',
+      'layer-actual-next',
+      'layer-af'
+    ];
+    for (let i = 0; i < STACK_ORDER.length - 1; i++) {
+      const cur = STACK_ORDER[i];
+      const nxt = STACK_ORDER[i + 1];
+      if (map.getLayer(cur) && map.getLayer(nxt)) {
+        try {
+          map.moveLayer(cur, nxt);
+        } catch {
+          // ignore transient re-order
+        }
+      }
+    }
   }, [
     mapLoaded,
     fireId,
     currentDate,
     days,
     layerState,
+    processedThermalUrl,
     processedNextDayUrl,
     processedConfusionUrl,
     imageCoordinates
   ]);
+
+  // Toggle 3D Perspective Tilt
+  const toggle3D = () => {
+    const map = mapRef.current;
+    if (!map) return;
+    const nextState = !is3D;
+    setIs3D(nextState);
+    if (nextState) {
+      map.easeTo({
+        pitch: 45,
+        bearing: -12,
+        duration: 900
+      });
+    } else {
+      map.easeTo({
+        pitch: 0,
+        bearing: 0,
+        duration: 800
+      });
+    }
+  };
 
   // Reset map view
   const handleResetBounds = () => {
@@ -525,6 +639,19 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         </button>
 
         <button
+          onClick={toggle3D}
+          className={`px-3 py-1 rounded-xl transition-all flex items-center space-x-1.5 text-xs font-mono border ${
+            is3D
+              ? 'bg-orange-600 text-white border-orange-500 shadow-md shadow-orange-600/30'
+              : 'text-slate-300 hover:text-white hover:bg-white/10 border-white/5'
+          }`}
+          title="Toggle 3D Perspective Terrain Pitch"
+        >
+          <Box className="w-3.5 h-3.5 text-amber-400" />
+          <span className="font-semibold">{is3D ? '3D' : '2D'}</span>
+        </button>
+
+        <button
           onClick={handleResetBounds}
           className="p-1.5 rounded-xl hover:bg-white/10 text-slate-300 hover:text-white transition-colors"
           title="Reset Camera to Fire Bounds"
@@ -536,20 +663,20 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       {/* Map Legend (Positioned above timeline player) */}
       <div className="absolute bottom-28 left-4 z-10 bg-slate-950/85 backdrop-blur-xl border border-white/[0.1] rounded-2xl px-4 py-2 text-[10px] font-mono text-slate-300 flex items-center space-x-4 shadow-2xl select-none hidden sm:flex ring-1 ring-black/40">
         <div className="flex items-center space-x-1.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]" />
-          <span className="font-medium text-emerald-300">True Positive</span>
+          <span className="w-2.5 h-2.5 rounded-full bg-[#00FF66] shadow-[0_0_8px_#00FF66]" />
+          <span className="font-medium text-[#00FF66]">True Positive</span>
         </div>
         <div className="flex items-center space-x-1.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-[0_0_8px_#f59e0b]" />
-          <span className="font-medium text-amber-300">False Alarm</span>
+          <span className="w-2.5 h-2.5 rounded-full bg-[#FFDC00] shadow-[0_0_8px_#FFDC00]" />
+          <span className="font-medium text-[#FFDC00]">False Alarm</span>
         </div>
         <div className="flex items-center space-x-1.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-[0_0_8px_#3b82f6]" />
-          <span className="font-medium text-blue-300">Missed Front</span>
+          <span className="w-2.5 h-2.5 rounded-full bg-[#00DCFF] shadow-[0_0_8px_#00DCFF]" />
+          <span className="font-medium text-[#00DCFF]">Missed Front</span>
         </div>
         <div className="flex items-center space-x-1.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-gradient-to-r from-amber-400 to-orange-600 shadow-[0_0_8px_#f97316]" />
-          <span className="font-medium text-orange-400">24h Forecast</span>
+          <span className="w-2.5 h-2.5 rounded-full bg-[#FF5500] shadow-[0_0_8px_#FF5500]" />
+          <span className="font-medium text-[#FF8833]">24h Forecast</span>
         </div>
         <div className="text-slate-400 border-l border-white/10 pl-3 font-semibold">
           375m VIIRS Grid

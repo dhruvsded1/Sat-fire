@@ -63,9 +63,20 @@ export const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [initError, setInitError] = useState<string | null>(null);
 
+  const [isTourRunning, setIsTourRunning] = useState<boolean>(false);
+  const [tourStepText, setTourStepText] = useState<string | null>(null);
+  const tourTimeoutsRef = React.useRef<number[]>([]);
+
+  const stopTour = () => {
+    tourTimeoutsRef.current.forEach(clearTimeout);
+    tourTimeoutsRef.current = [];
+    setIsTourRunning(false);
+    setTourStepText(null);
+  };
+
   // Dynamic active mode calculation
   const activeMode: PresentationMode =
-    layerState.showThermal && !layerState.showComposite
+    layerState.showThermal
       ? 'physics'
       : layerState.showNextDay
       ? 'forecast'
@@ -76,10 +87,10 @@ export const App: React.FC = () => {
       setLayerState((prev) => ({
         ...prev,
         showComposite: true,
-        compositeOpacity: 0.65,
+        compositeOpacity: 0.95,
         showThermal: true,
-        thermalOpacity: 0.85,
-        activeFireMode: 'pred',
+        thermalOpacity: 0.95,
+        activeFireMode: 'none',
         burnedAreaMode: 'none',
         showNextDay: false,
         predictionOpacity: 1.0
@@ -90,7 +101,7 @@ export const App: React.FC = () => {
         showComposite: true,
         compositeOpacity: 0.95,
         showThermal: false,
-        thermalOpacity: 0.8,
+        thermalOpacity: 0.0,
         activeFireMode: 'confusion',
         burnedAreaMode: 'none',
         showNextDay: false,
@@ -100,9 +111,9 @@ export const App: React.FC = () => {
       setLayerState((prev) => ({
         ...prev,
         showComposite: true,
-        compositeOpacity: 0.90,
+        compositeOpacity: 0.95,
         showThermal: false,
-        thermalOpacity: 0.8,
+        thermalOpacity: 0.0,
         activeFireMode: 'none',
         burnedAreaMode: 'none',
         showNextDay: true,
@@ -112,6 +123,100 @@ export const App: React.FC = () => {
       }));
     }
   };
+
+  const startTour = () => {
+    stopTour();
+    if (!fireMetrics?.days || fireMetrics.days.length === 0) return;
+    const days = fireMetrics.days.map((d) => d.date);
+    setIsTourRunning(true);
+
+    const schedule = (fn: () => void, delayMs: number) => {
+      const id = window.setTimeout(fn, delayMs);
+      tourTimeoutsRef.current.push(id);
+    };
+
+    // Phase 1 (0s): Physics / Thermal IR
+    setTourStepText('🛰️ Step 1/4: VIIRS 3.74µm Thermal Radiance (Planck Inception Detection)');
+    setCurrentDate(days[0]);
+    handleSelectMode('physics');
+
+    // Phase 2 (3.5s): AI U-Net Detection
+    schedule(() => {
+      setTourStepText('🎯 Step 2/4: U-Net Active Fire Segmentation (Green: True Positives)');
+      const peakIdx = Math.min(2, days.length - 1);
+      setCurrentDate(days[peakIdx]);
+      handleSelectMode('detection');
+    }, 3500);
+
+    // Phase 3 (7.0s): Slide to Compare
+    schedule(() => {
+      setTourStepText('🔍 Step 3/4: SWIR Smoke Penetration — Cross-fading Satellite & AI Layer');
+      setLayerState((prev) => ({ ...prev, predictionOpacity: 0.1 }));
+      schedule(() => {
+        setLayerState((prev) => ({ ...prev, predictionOpacity: 1.0 }));
+      }, 1200);
+    }, 7000);
+
+    // Phase 4 (10.5s): 24h Spread Forecast
+    schedule(() => {
+      setTourStepText('🔮 Step 4/4: 24h Forecast Surface & Ground Truth Perimeter Expansion');
+      handleSelectMode('forecast');
+    }, 10500);
+
+    // Completion (14.0s)
+    schedule(() => {
+      setTourStepText('✨ Presentation Tour Complete! Explore freely or click any pixel to sample telemetry.');
+      schedule(() => {
+        stopTour();
+      }, 3500);
+    }, 14000);
+  };
+
+  // Global Keyboard Shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLSelectElement ||
+        e.target instanceof HTMLTextAreaElement
+      ) {
+        return;
+      }
+
+      const days = fireMetrics?.days?.map((d) => d.date) || [];
+      if (e.code === 'Space') {
+        e.preventDefault();
+        if (days.length > 0) {
+          const idx = days.indexOf(currentDate);
+          const nextIdx = (idx + 1) % days.length;
+          setCurrentDate(days[nextIdx]);
+        }
+      } else if (e.code === 'ArrowRight' || e.code === 'KeyD') {
+        e.preventDefault();
+        if (days.length > 0) {
+          const idx = days.indexOf(currentDate);
+          if (idx < days.length - 1) setCurrentDate(days[idx + 1]);
+        }
+      } else if (e.code === 'ArrowLeft' || e.code === 'KeyA') {
+        e.preventDefault();
+        if (days.length > 0) {
+          const idx = days.indexOf(currentDate);
+          if (idx > 0) setCurrentDate(days[idx - 1]);
+        }
+      } else if (e.key === '1') {
+        handleSelectMode('physics');
+      } else if (e.key === '2') {
+        handleSelectMode('detection');
+      } else if (e.key === '3') {
+        handleSelectMode('forecast');
+      } else if (e.key === 'Escape' && isTourRunning) {
+        stopTour();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [fireMetrics, currentDate, isTourRunning]);
 
   // Dynamically re-sample active inspected coordinates when timeline date changes
   useEffect(() => {
@@ -255,10 +360,27 @@ export const App: React.FC = () => {
         showMetrics={showMetrics}
         onToggleMetrics={() => setShowMetrics((v) => !v)}
         isSwitchingFire={isSwitchingFire}
+        isTourRunning={isTourRunning}
+        onToggleTour={isTourRunning ? stopTour : startTour}
       />
 
       {/* Main Body View */}
       <div className="flex-1 relative overflow-hidden">
+        {/* Automated Guided Presentation Demo Banner */}
+        {tourStepText && (
+          <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-40 bg-slate-950/95 backdrop-blur-2xl border border-amber-400/60 rounded-full px-5 py-2.5 shadow-[0_12px_40px_rgba(245,158,11,0.4)] flex items-center space-x-3 text-xs font-mono text-amber-200 ring-1 ring-amber-400/40">
+            <Sparkles className="w-4 h-4 text-amber-400 animate-spin" />
+            <span className="font-bold tracking-tight">{tourStepText}</span>
+            <button
+              onClick={stopTour}
+              className="text-slate-400 hover:text-white p-1 rounded-full hover:bg-white/10 transition-colors ml-1"
+              title="End Tour"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
         {activeTab === 'explorer' && (
           <div className="relative w-full h-full overflow-hidden">
             {/* 100% Full-Screen Edge-to-Edge Map */}

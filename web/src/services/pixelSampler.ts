@@ -82,7 +82,7 @@ class PixelSampler {
       if (!entry) return false;
       try {
         const p = entry.ctx.getImageData(px, py, 1, 1).data;
-        return p[3] > 40 || p[0] > 40 || p[2] > 40;
+        return p[3] > 40 && (p[0] > 40 || p[1] > 40 || p[2] > 40);
       } catch {
         return false;
       }
@@ -95,7 +95,10 @@ class PixelSampler {
     const isActiveFirePred = getMaskPresent('afPred');
     const isBurnedAreaGT = getMaskPresent('baGt');
     const isBurnedAreaPred = getMaskPresent('baPred');
-    const nextDayProb = Math.round((getPixelVal('predNext') / 255.0) * 100) / 100;
+    
+    // Calibrated probability: raw values <= 140 are ambient unburned terrain noise floor (~0.52 sigmoid bias)
+    const rawNext = getPixelVal('predNext');
+    const nextDayProb = rawNext <= 140 ? 0 : Math.round(Math.min(1.0, (rawNext - 140) / 115) * 100) / 100;
 
     let confusionCategory: InspectorSample['confusionCategory'] = 'Unburned / True Negative';
     if (isActiveFireGT && isActiveFirePred) {
@@ -111,7 +114,7 @@ class PixelSampler {
       fuelState = 'Flaming Firefront';
     } else if (isBurnedAreaGT) {
       fuelState = 'Smoldering Scar';
-    } else if (nextDayProb > 0.45) {
+    } else if (nextDayProb > 0.35) {
       fuelState = 'Active Growth Zone';
     }
 

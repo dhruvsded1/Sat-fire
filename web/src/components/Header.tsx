@@ -26,6 +26,8 @@ interface HeaderProps {
   showMetrics: boolean;
   onToggleMetrics: () => void;
   isSwitchingFire?: boolean;
+  isTourRunning?: boolean;
+  onToggleTour?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -39,7 +41,9 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectFire,
   showMetrics,
   onToggleMetrics,
-  isSwitchingFire = false
+  isSwitchingFire = false,
+  isTourRunning = false,
+  onToggleTour
 }) => {
   return (
     <header className="bg-slate-950/80 backdrop-blur-xl border-b border-white/[0.08] px-4 py-2 flex items-center justify-between select-none z-30 sticky top-0 shadow-[0_4px_20px_rgba(0,0,0,0.5)]">
@@ -194,6 +198,22 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <BarChart3 className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Analytics</span>
+          </button>
+        )}
+
+        {/* Auto Demo Tour */}
+        {activeTab === 'explorer' && onToggleTour && (
+          <button
+            onClick={onToggleTour}
+            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-full text-xs font-mono font-semibold transition-all border ${
+              isTourRunning
+                ? 'bg-amber-500 text-slate-950 border-amber-400 animate-pulse shadow-lg shadow-amber-500/40'
+                : 'text-amber-300 hover:text-white bg-amber-950/40 hover:bg-amber-900/60 border-amber-500/40 shadow-sm hover:scale-105'
+            }`}
+            title="Automated 1-Click Guided Presentation Tour for Professor"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-400 fill-current" />
+            <span className="hidden sm:inline">{isTourRunning ? 'Stop Demo' : 'Auto Demo'}</span>
           </button>
         )}
 
