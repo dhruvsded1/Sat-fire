@@ -248,13 +248,15 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     nextImg.crossOrigin = 'anonymous';
     nextImg.onload = () => {
       if (cancelled) return;
+      const w = nextImg.naturalWidth || 512;
+      const h = nextImg.naturalHeight || 512;
       const c = document.createElement('canvas');
-      c.width = 256;
-      c.height = 256;
+      c.width = w;
+      c.height = h;
       const ctx = c.getContext('2d');
       if (ctx) {
-        ctx.drawImage(nextImg, 0, 0);
-        const imgData = ctx.getImageData(0, 0, 256, 256);
+        ctx.drawImage(nextImg, 0, 0, w, h);
+        const imgData = ctx.getImageData(0, 0, w, h);
         const d = imgData.data;
         const thresh = Math.round(layerState.nextDayThreshold * 255);
 
@@ -262,10 +264,11 @@ export const MapViewer: React.FC<MapViewerProps> = ({
           const prob = d[i];
           if (prob >= thresh) {
             const norm = (prob - thresh) / (255 - thresh + 1e-4);
+            // Radiant Glowing Lava (Electric Amber -> Neon Flare Orange)
             d[i] = 255;
-            d[i + 1] = Math.round(80 + norm * 140);
+            d[i + 1] = Math.round(190 - norm * 110);
             d[i + 2] = 0;
-            d[i + 3] = Math.round(140 + norm * 100);
+            d[i + 3] = Math.round(210 + norm * 45); // High opacity, ultra luminous!
           } else {
             d[i + 3] = 0;
           }
@@ -296,10 +299,10 @@ export const MapViewer: React.FC<MapViewerProps> = ({
           cGt.height = h;
           const ctxGt = cGt.getContext('2d');
           if (ctxGt) {
-            ctxGt.drawImage(afGtImg, 0, 0);
+            ctxGt.drawImage(afGtImg, 0, 0, w, h);
             const gtData = ctxGt.getImageData(0, 0, w, h).data;
 
-            ctx.drawImage(afPredImg, 0, 0);
+            ctx.drawImage(afPredImg, 0, 0, w, h);
             const predData = ctx.getImageData(0, 0, w, h);
             const d = predData.data;
 
@@ -308,23 +311,23 @@ export const MapViewer: React.FC<MapViewerProps> = ({
               const isGt = gtData[i + 3] > 40 || gtData[i] > 80;
 
               if (isPred && isGt) {
-                // Correct (True Positive): Green
-                d[i] = 34;
-                d[i + 1] = 197;
-                d[i + 2] = 94;
-                d[i + 3] = 235;
+                // Correct (True Positive): Radioactive Neon Green (Max Luminosity!)
+                d[i] = 0;
+                d[i + 1] = 255;
+                d[i + 2] = 100;
+                d[i + 3] = 255;
               } else if (isPred && !isGt) {
-                // False Alarm (False Positive): Amber
-                d[i] = 245;
-                d[i + 1] = 158;
-                d[i + 2] = 11;
-                d[i + 3] = 235;
+                // False Alarm (False Positive): Bright High-Voltage Yellow
+                d[i] = 255;
+                d[i + 1] = 220;
+                d[i + 2] = 0;
+                d[i + 3] = 255;
               } else if (!isPred && isGt) {
-                // Missed (False Negative): Blue
-                d[i] = 59;
-                d[i + 1] = 130;
-                d[i + 2] = 246;
-                d[i + 3] = 235;
+                // Missed (False Negative): Vivid Electric Cyan (Glowing against terrain!)
+                d[i] = 0;
+                d[i + 1] = 220;
+                d[i + 2] = 255;
+                d[i + 3] = 255;
               } else {
                 d[i + 3] = 0;
               }
@@ -381,7 +384,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
           paint: {
             'raster-opacity': opacity,
             'raster-fade-duration': 0,
-            'raster-resampling': layerId.includes('composite') || layerId.includes('thermal') ? 'linear' : 'nearest'
+            'raster-resampling': 'linear'
           }
         });
       } else {

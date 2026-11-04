@@ -49,15 +49,15 @@ export const App: React.FC = () => {
 
   const [layerState, setLayerState] = useState<LayerState>({
     showComposite: true,
-    compositeOpacity: 0.9,
+    compositeOpacity: 0.95,
     showThermal: false,
-    thermalOpacity: 0.8,
+    thermalOpacity: 0.85,
     activeFireMode: 'confusion', // Default to algorithm verification
     burnedAreaMode: 'none',
     showNextDay: false,
     nextDayThreshold: 0.35,
     showActualNextOverlay: false,
-    predictionOpacity: 0.85
+    predictionOpacity: 1.0
   });
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -75,31 +75,32 @@ export const App: React.FC = () => {
     if (mode === 'physics') {
       setLayerState((prev) => ({
         ...prev,
-        showComposite: false,
+        showComposite: true,
+        compositeOpacity: 0.65,
         showThermal: true,
-        thermalOpacity: 0.95,
+        thermalOpacity: 0.85,
         activeFireMode: 'pred',
         burnedAreaMode: 'none',
         showNextDay: false,
-        predictionOpacity: 0.8
+        predictionOpacity: 1.0
       }));
     } else if (mode === 'detection') {
       setLayerState((prev) => ({
         ...prev,
         showComposite: true,
-        compositeOpacity: 0.9,
+        compositeOpacity: 0.95,
         showThermal: false,
         thermalOpacity: 0.8,
         activeFireMode: 'confusion',
         burnedAreaMode: 'none',
         showNextDay: false,
-        predictionOpacity: 0.85
+        predictionOpacity: 1.0
       }));
     } else if (mode === 'forecast') {
       setLayerState((prev) => ({
         ...prev,
         showComposite: true,
-        compositeOpacity: 0.85,
+        compositeOpacity: 0.90,
         showThermal: false,
         thermalOpacity: 0.8,
         activeFireMode: 'none',
@@ -107,7 +108,7 @@ export const App: React.FC = () => {
         showNextDay: true,
         nextDayThreshold: 0.35,
         showActualNextOverlay: true,
-        predictionOpacity: 0.9
+        predictionOpacity: 1.0
       }));
     }
   };
