@@ -5,7 +5,8 @@ import {
   Thermometer,
   RefreshCw,
   BarChart3,
-  Calendar
+  Calendar,
+  Globe
 } from 'lucide-react';
 import { Bounds, LayerState, DayMetric, InspectorSample } from '../types/contract';
 import { getDayRasterUrls } from '../services/dataService';
@@ -25,20 +26,25 @@ interface MapViewerProps {
   onToggleMetrics?: () => void;
 }
 
-// Fallback dark style in case external tile services are unreachable
+// High-performance, unauthenticated ESRI basemaps (Zero watermarks, Zero API keys required)
 const FALLBACK_DARK_STYLE: maplibregl.StyleSpecification = {
   version: 8,
   sources: {
-    'carto-dark': {
+    'esri-dark': {
       type: 'raster',
       tiles: [
-        'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
-        'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
-        'https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
-        'https://d.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png'
+        'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}'
       ],
       tileSize: 256,
-      attribution: '&copy; CartoDB &copy; OpenStreetMap'
+      attribution: '© Esri, HERE, Garmin, OpenStreetMap'
+    },
+    'esri-imagery': {
+      type: 'raster',
+      tiles: [
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+      ],
+      tileSize: 256,
+      attribution: '© Esri, Maxar, Earthstar Geographics'
     }
   },
   layers: [
@@ -50,11 +56,24 @@ const FALLBACK_DARK_STYLE: maplibregl.StyleSpecification = {
       }
     },
     {
-      id: 'carto-dark-layer',
+      id: 'esri-dark-layer',
       type: 'raster',
-      source: 'carto-dark',
+      source: 'esri-dark',
       minzoom: 0,
-      maxzoom: 19
+      maxzoom: 17,
+      layout: {
+        visibility: 'visible'
+      }
+    },
+    {
+      id: 'esri-imagery-layer',
+      type: 'raster',
+      source: 'esri-imagery',
+      minzoom: 0,
+      maxzoom: 17,
+      layout: {
+        visibility: 'none'
+      }
     }
   ]
 };
@@ -82,6 +101,23 @@ export const MapViewer: React.FC<MapViewerProps> = ({
   onSamplePixelRef.current = onSamplePixel;
 
   const [mapLoaded, setMapLoaded] = useState<boolean>(false);
+  const [basemap, setBasemap] = useState<'dark' | 'satellite'>('dark');
+
+  // Dynamic basemap switcher: Dark Canvas vs Satellite Imagery
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded) return;
+    try {
+      if (map.getLayer('esri-dark-layer')) {
+        map.setLayoutProperty('esri-dark-layer', 'visibility', basemap === 'dark' ? 'visible' : 'none');
+      }
+      if (map.getLayer('esri-imagery-layer')) {
+        map.setLayoutProperty('esri-imagery-layer', 'visibility', basemap === 'satellite' ? 'visible' : 'none');
+      }
+    } catch {
+      // ignore before load
+    }
+  }, [basemap, mapLoaded]);
 
   // Processed thresholded next-day canvas URL
   const [processedNextDayUrl, setProcessedNextDayUrl] = useState<string>('');
@@ -475,6 +511,15 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
       {/* Top Right Quick Map Controls */}
       <div className="absolute top-4 right-4 z-10 flex items-center space-x-1.5 bg-slate-900/90 backdrop-blur border border-slate-800 rounded-lg p-1 shadow-xl">
+        <button
+          onClick={() => setBasemap((b) => (b === 'dark' ? 'satellite' : 'dark'))}
+          className="px-2 py-1 rounded hover:bg-slate-800 text-slate-300 hover:text-white transition-colors flex items-center space-x-1.5 text-[11px] font-mono border border-slate-700/60"
+          title="Toggle Basemap: Dark Cartography vs Real Topographic Satellite Imagery"
+        >
+          <Globe className="w-3.5 h-3.5 text-cyan-400" />
+          <span className="capitalize">{basemap === 'dark' ? 'Dark Map' : 'Satellite'}</span>
+        </button>
+
         <button
           onClick={handleResetBounds}
           className="p-1.5 rounded hover:bg-slate-800 text-slate-300 hover:text-white transition-colors"
